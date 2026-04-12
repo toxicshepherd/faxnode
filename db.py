@@ -350,6 +350,35 @@ def get_unread_count():
         return row["cnt"]
 
 
+def get_archive_count(search=None):
+    """Gesamtanzahl archivierter Faxe (fuer Pagination)."""
+    with db_connection() as conn:
+        if search:
+            row = conn.execute(
+                """SELECT COUNT(*) as cnt FROM faxes f
+                   LEFT JOIN address_book ab ON f.phone_number = ab.phone_number
+                   WHERE f.archived = 1 AND (
+                       f.id IN (SELECT rowid FROM faxes_fts WHERE faxes_fts MATCH ?)
+                       OR f.phone_number LIKE ? OR ab.name LIKE ?
+                   )""",
+                (search, f"%{search}%", f"%{search}%")
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) as cnt FROM faxes WHERE archived = 1"
+            ).fetchone()
+        return row["cnt"]
+
+
+def get_failed_ocr_fax_ids():
+    """IDs von Faxen mit fehlgeschlagenem oder ausstehendem OCR."""
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT id FROM faxes WHERE ocr_done IN (0, -1) ORDER BY id ASC"
+        ).fetchall()
+        return [row["id"] for row in rows]
+
+
 # --- Thumbnails ---
 
 def update_fax_thumbnail(fax_id, thumbnail_path):

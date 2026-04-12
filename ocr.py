@@ -90,6 +90,18 @@ def _generate_thumbnail(fax_id, image):
         return None
 
 
+def requeue_failed():
+    """Fehlgeschlagene/ausstehende OCR-Jobs erneut in die Queue stellen."""
+    fax_ids = db.get_failed_ocr_fax_ids()
+    if fax_ids:
+        # Zuerst alle auf ocr_done=0 zuruecksetzen
+        with db.db_connection() as conn:
+            conn.execute("UPDATE faxes SET ocr_done = 0 WHERE ocr_done = -1")
+        for fax_id in fax_ids:
+            ocr_queue.put(fax_id)
+        logger.info("OCR Re-Queue: %d Faxe erneut eingereiht", len(fax_ids))
+
+
 def start_ocr_worker(broadcast_fn):
     """OCR Worker Thread starten."""
     global _broadcast
@@ -98,3 +110,6 @@ def start_ocr_worker(broadcast_fn):
     worker = threading.Thread(target=_ocr_worker, daemon=True, name="ocr-worker")
     worker.start()
     logger.info("OCR Worker gestartet")
+
+    # Fehlgeschlagene OCR-Jobs erneut verarbeiten
+    requeue_failed()

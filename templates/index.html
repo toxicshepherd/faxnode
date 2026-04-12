@@ -81,5 +81,17 @@
     {% endif %}
 </div>
 
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="{{ url_for('fax_list', page=page-1, status=current_status, category=current_category, q=search or None) }}" class="btn btn-sm btn-ghost">&larr; Zurueck</a>
+    {% endif %}
+    <span class="pagination-info mono-sm">Seite {{ page }} von {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="{{ url_for('fax_list', page=page+1, status=current_status, category=current_category, q=search or None) }}" class="btn btn-sm btn-ghost">Weiter &rarr;</a>
+    {% endif %}
+</div>
+{% endif %}
+
 <script>var UNREAD_COUNT = {{ unread }};</script>
 {% endblock %}

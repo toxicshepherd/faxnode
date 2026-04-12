@@ -73,11 +73,22 @@ def fax_list():
     status_filter = request.args.get("status")
     category_filter = request.args.get("category")
     search = request.args.get("q")
-    faxes = db.get_faxes(status=status_filter, category=category_filter, archived=0, search=search)
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 30
+    offset = (page - 1) * per_page
+    faxes = db.get_faxes(status=status_filter, category=category_filter, archived=0, search=search, limit=per_page, offset=offset)
     counts = db.get_fax_count_by_status(archived=0)
     cat_counts = db.get_fax_count_by_category(archived=0)
     total = sum(counts.values())
     unread = counts.get("neu", 0)
+    # Gesamtzahl fuer Pagination berechnen
+    if status_filter:
+        filtered_total = counts.get(status_filter, 0)
+    elif category_filter:
+        filtered_total = cat_counts.get(category_filter, 0)
+    else:
+        filtered_total = total
+    total_pages = max(1, (filtered_total + per_page - 1) // per_page)
     return render_template(
         "index.html",
         faxes=faxes,
@@ -90,6 +101,8 @@ def fax_list():
         search=search or "",
         statuses=config.FAX_STATUSES,
         categories=config.FAX_CATEGORIES,
+        page=page,
+        total_pages=total_pages,
     )
 
 
@@ -111,8 +124,13 @@ def fax_detail(fax_id):
 @app.route("/archiv")
 def archive():
     search = request.args.get("q")
-    faxes = db.get_faxes(archived=1, search=search)
-    return render_template("archive.html", faxes=faxes, search=search or "")
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 30
+    offset = (page - 1) * per_page
+    faxes = db.get_faxes(archived=1, search=search, limit=per_page, offset=offset)
+    archive_total = db.get_archive_count(search=search)
+    total_pages = max(1, (archive_total + per_page - 1) // per_page)
+    return render_template("archive.html", faxes=faxes, search=search or "", page=page, total_pages=total_pages)
 
 
 @app.route("/adressbuch")
