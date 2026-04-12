@@ -1,68 +1,90 @@
 #!/bin/bash
-# FaxNode – Installations-Script fuer Raspberry Pi
+# FaxNode – Installer
+# Bringt alles zum Laufen, Konfiguration erfolgt im Browser.
 set -e
 
-echo "=== FaxNode Installation ==="
+REPO="https://github.com/toxicshepherd/faxnode.git"
+INSTALL_DIR="/opt/faxnode"
+USER=$(whoami)
 
-# System-Pakete
-echo "[1/6] System-Pakete installieren..."
-sudo apt-get update
-sudo apt-get install -y \
+echo ""
+echo "  ╔═══════════════════════════╗"
+echo "  ║     FaxNode Installer     ║"
+echo "  ╚═══════════════════════════╝"
+echo ""
+
+# 1. System-Pakete
+echo "[1/5] System-Pakete installieren..."
+sudo apt-get update -qq
+sudo apt-get install -y -qq \
     python3 python3-venv python3-pip \
     tesseract-ocr tesseract-ocr-deu \
     poppler-utils \
     libcups2-dev \
-    cifs-utils
+    cifs-utils \
+    git > /dev/null
+echo "      Fertig."
 
-# Benutzer anlegen
-echo "[2/6] Benutzer 'faxnode' anlegen..."
-if ! id -u faxnode &>/dev/null; then
-    sudo useradd -r -s /bin/false -m -d /opt/faxnode faxnode
+# 2. Repo klonen
+echo "[2/5] FaxNode herunterladen..."
+if [ -d "$INSTALL_DIR" ]; then
+    echo "      $INSTALL_DIR existiert bereits, aktualisiere..."
+    sudo git -C "$INSTALL_DIR" pull -q
+else
+    sudo git clone -q "$REPO" "$INSTALL_DIR"
 fi
+sudo chown -R "$USER":"$USER" "$INSTALL_DIR"
+echo "      Fertig."
 
-# Dateien kopieren
-echo "[3/6] Dateien nach /opt/faxnode kopieren..."
-sudo mkdir -p /opt/faxnode/data
-sudo cp -r ./*.py ./requirements.txt ./static ./templates /opt/faxnode/
-sudo cp .env.example /opt/faxnode/.env
+# 3. Python-Umgebung
+echo "[3/5] Python-Umgebung einrichten..."
+python3 -m venv "$INSTALL_DIR/venv"
+"$INSTALL_DIR/venv/bin/pip" install --upgrade pip -q
+"$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -q
+echo "      Fertig."
 
-# Python venv + Dependencies
-echo "[4/6] Python-Umgebung einrichten..."
-sudo python3 -m venv /opt/faxnode/venv
-sudo /opt/faxnode/venv/bin/pip install --upgrade pip
-sudo /opt/faxnode/venv/bin/pip install -r /opt/faxnode/requirements.txt
-
-# NAS-Mount vorbereiten
-echo "[5/6] NAS-Mount vorbereiten..."
+# 4. Verzeichnisse anlegen
+echo "[4/5] Verzeichnisse vorbereiten..."
+mkdir -p "$INSTALL_DIR/data/thumbnails"
+mkdir -p "$INSTALL_DIR/static/sounds"
 sudo mkdir -p /mnt/nas/faxe
-echo ""
-echo "  WICHTIG: NAS-Mount manuell konfigurieren!"
-echo "  1. Erstelle /etc/samba/fax_creds mit:"
-echo "     username=DEIN_NAS_USER"
-echo "     password=DEIN_NAS_PASSWORT"
-echo ""
-echo "  2. Fuege folgende Zeile zu /etc/fstab hinzu:"
-echo "     //NAS-IP/fax-share /mnt/nas/faxe cifs credentials=/etc/samba/fax_creds,uid=faxnode,gid=faxnode,iocharset=utf8,_netdev 0 0"
-echo ""
-echo "  3. Mounte mit: sudo mount -a"
-echo ""
+echo "      Fertig."
 
-# Berechtigungen + .env anpassen
-sudo chown -R faxnode:faxnode /opt/faxnode
-echo "  Passe /opt/faxnode/.env an (FAX_WATCH_DIR, SECRET_KEY)!"
+# 5. systemd Service
+echo "[5/5] systemd Service einrichten..."
+sudo tee /etc/systemd/system/faxnode.service > /dev/null <<EOF
+[Unit]
+Description=FaxNode – Digitale Faxverwaltung
+After=network.target remote-fs.target
 
-# systemd Service
-echo "[6/6] systemd Service einrichten..."
-sudo cp faxnode.service /etc/systemd/system/
+[Service]
+Type=simple
+User=$USER
+Group=$USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:5000 --timeout 120 wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 sudo systemctl daemon-reload
-sudo systemctl enable faxnode.service
+sudo systemctl enable faxnode.service -q
+sudo systemctl start faxnode.service
+echo "      Fertig."
 
+# Fertig
+IP=$(hostname -I | awk '{print $1}')
 echo ""
-echo "=== Installation abgeschlossen ==="
+echo "  ══════════════════════════════════════"
+echo "  FaxNode laeuft!"
 echo ""
-echo "Naechste Schritte:"
-echo "  1. /opt/faxnode/.env anpassen"
-echo "  2. NAS-Mount konfigurieren (siehe oben)"
-echo "  3. sudo systemctl start faxnode"
-echo "  4. Im Browser oeffnen: http://$(hostname -I | awk '{print $1}'):5000"
+echo "  Oeffne im Browser:"
+echo "  http://$IP:5000"
+echo ""
+echo "  Der Setup-Wizard fuehrt dich durch"
+echo "  die restliche Einrichtung."
+echo "  ══════════════════════════════════════"
 echo ""
