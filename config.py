@@ -1,0 +1,41 @@
+"""FaxNode – Konfiguration."""
+import os
+import secrets
+from pathlib import Path
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).parent
+load_dotenv(BASE_DIR / ".env")
+
+# NAS-Verzeichnis wo die FritzBox Faxe speichert
+FAX_WATCH_DIR = os.environ.get("FAX_WATCH_DIR", "/mnt/nas/faxe")
+
+# Datenbank
+DATABASE = str(BASE_DIR / "data" / "faxnode.db")
+
+# Server
+HOST = os.environ.get("HOST", "0.0.0.0")
+PORT = int(os.environ.get("PORT", "5000"))
+SECRET_KEY = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+
+# FritzBox Dateiname: DD.MM.YY_HH.MM_Telefax.RUFNUMMER.pdf
+FAX_FILENAME_PATTERN = r"(\d{2})\.(\d{2})\.(\d{2})_(\d{2})\.(\d{2})_Telefax\.(\d+)\.pdf"
+
+# OCR
+OCR_LANGUAGE = os.environ.get("OCR_LANGUAGE", "deu")
+
+# Auto-Archiv nach X Tagen
+ARCHIVE_AFTER_DAYS = int(os.environ.get("ARCHIVE_AFTER_DAYS", "7"))
+
+# Auto-Delete nach X Tagen
+DELETE_AFTER_DAYS = int(os.environ.get("DELETE_AFTER_DAYS", "90"))
+
+# Polling-Fallback Intervall in Sekunden
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))
+
+FAX_STATUSES = {
+    "neu": "Neu",
+    "gelesen": "Gelesen",
+    "bearbeitet": "Bearbeitet",
+    "erledigt": "Erledigt",
+}

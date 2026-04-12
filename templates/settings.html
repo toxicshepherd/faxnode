@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen — FaxNode{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Einstellungen</h1>
+</div>
+
+<div class="settings-section card">
+    <h3>Auto-Druck Regeln</h3>
+    <p class="text-muted">Faxe von bestimmten Absendern automatisch an einen Drucker senden.</p>
+
+    <div id="rule-form-container" style="display:none; margin-bottom:1.5rem;">
+        <form id="rule-form" onsubmit="saveRule(event)">
+            <div class="form-row">
+                <label>Faxnummer</label>
+                <input type="text" name="phone_number" placeholder="z.B. 05721924822" required>
+            </div>
+            <div class="form-row">
+                <label>Drucker</label>
+                <select name="printer_name" required>
+                    <option value="">Drucker waehlen...</option>
+                    {% for name, info in printers.items() %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
+                    {% if not printers %}
+                    <option disabled>Keine Drucker gefunden</option>
+                    {% endif %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Kopien</label>
+                <input type="number" name="copies" value="1" min="1" max="10">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-sm">Speichern</button>
+                <button type="button" class="btn btn-sm btn-ghost" onclick="toggleRuleForm()">Abbrechen</button>
+            </div>
+        </form>
+    </div>
+
+    <button class="btn btn-sm" onclick="toggleRuleForm()" id="add-rule-btn">+ Regel hinzufuegen</button>
+
+    <div class="table-container" style="margin-top:1rem;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Absender</th>
+                    <th>Faxnummer</th>
+                    <th>Drucker</th>
+                    <th>Kopien</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in rules %}
+                <tr>
+                    <td>{{ rule.sender_name or '–' }}</td>
+                    <td class="mono-sm">{{ rule.phone_number }}</td>
+                    <td class="mono-sm">{{ rule.printer_name }}</td>
+                    <td>{{ rule.copies }}</td>
+                    <td><button class="btn btn-sm btn-ghost btn-danger" onclick="deleteRule({{ rule.id }})">Loeschen</button></td>
+                </tr>
+                {% endfor %}
+                {% if not rules %}
+                <tr><td colspan="5" class="text-muted">Keine Regeln konfiguriert</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="settings-section card">
+    <h3>System</h3>
+    <div class="meta-row">
+        <span class="meta-label">Auto-Archiv</span>
+        <span>Nach 7 Tagen (Status "Erledigt")</span>
+    </div>
+    <div class="meta-row">
+        <span class="meta-label">Auto-Loeschung</span>
+        <span>Nach 3 Monaten (archivierte Faxe)</span>
+    </div>
+</div>
+{% endblock %}

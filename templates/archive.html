@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Archiv — FaxNode{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Archiv</h1>
+    <form class="search-form" action="{{ url_for('archive') }}" method="get">
+        <input type="text" name="q" value="{{ search }}" placeholder="Archiv durchsuchen..." class="search-input">
+        <button type="submit" class="btn btn-sm">Suchen</button>
+        {% if search %}
+        <a href="{{ url_for('archive') }}" class="btn btn-sm btn-ghost">Zuruecksetzen</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="fax-list">
+    {% if faxes %}
+    {% for fax in faxes %}
+    <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card archived">
+        <div class="fax-card-header">
+            <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
+            <span class="fax-status badge badge-erledigt">Archiviert</span>
+        </div>
+        <div class="fax-card-meta">
+            <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
+            {% if fax.sender_name %}
+            <span class="mono-sm text-muted">{{ fax.phone_number }}</span>
+            {% endif %}
+        </div>
+        {% if fax.ocr_text %}
+        <div class="fax-card-preview text-muted">{{ fax.ocr_text[:120] }}{% if fax.ocr_text|length > 120 %}...{% endif %}</div>
+        {% endif %}
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state">
+        <p>{% if search %}Keine archivierten Faxe gefunden{% else %}Archiv ist leer{% endif %}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

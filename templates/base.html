@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FaxNode{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app">
+        <nav class="sidebar">
+            <div class="sidebar-logo">
+                <span class="logo-icon">&#9906;</span>
+                <span class="logo-text">FaxNode</span>
+            </div>
+            <div class="sidebar-nav">
+                <a href="{{ url_for('fax_list') }}" class="nav-item {% if request.endpoint == 'fax_list' %}active{% endif %}">
+                    <span class="nav-icon">&#9993;</span>
+                    <span>Faxe</span>
+                    {% if total is defined and total > 0 %}
+                    <span class="nav-badge">{{ total }}</span>
+                    {% endif %}
+                </a>
+                <a href="{{ url_for('archive') }}" class="nav-item {% if request.endpoint == 'archive' %}active{% endif %}">
+                    <span class="nav-icon">&#128451;</span>
+                    <span>Archiv</span>
+                </a>
+                <a href="{{ url_for('address_book') }}" class="nav-item {% if request.endpoint == 'address_book' %}active{% endif %}">
+                    <span class="nav-icon">&#128213;</span>
+                    <span>Adressbuch</span>
+                </a>
+                <a href="{{ url_for('settings') }}" class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
+                    <span class="nav-icon">&#9881;</span>
+                    <span>Einstellungen</span>
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                <span class="mono-sm">FaxNode v1.0</span>
+            </div>
+        </nav>
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <div id="toast-container"></div>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

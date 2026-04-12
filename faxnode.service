@@ -1,0 +1,16 @@
+[Unit]
+Description=FaxNode – Digitale Faxverwaltung
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+User=faxnode
+Group=faxnode
+WorkingDirectory=/opt/faxnode
+EnvironmentFile=/opt/faxnode/.env
+ExecStart=/opt/faxnode/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:5000 --timeout 120 wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Faxe — FaxNode{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Faxe</h1>
+    <form class="search-form" action="{{ url_for('fax_list') }}" method="get">
+        {% if current_status %}
+        <input type="hidden" name="status" value="{{ current_status }}">
+        {% endif %}
+        <input type="text" name="q" value="{{ search }}" placeholder="Suche (Absender, Nummer, Inhalt...)" class="search-input">
+        <button type="submit" class="btn btn-sm">Suchen</button>
+        {% if search %}
+        <a href="{{ url_for('fax_list', status=current_status) }}" class="btn btn-sm btn-ghost">Zuruecksetzen</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="status-tabs">
+    <a href="{{ url_for('fax_list', q=search or None) }}" class="tab {% if not current_status %}active{% endif %}">
+        Alle <span class="tab-count">{{ total }}</span>
+    </a>
+    {% for key, label in statuses.items() %}
+    <a href="{{ url_for('fax_list', status=key, q=search or None) }}" class="tab {% if current_status == key %}active{% endif %}">
+        {{ label }} <span class="tab-count">{{ counts.get(key, 0) }}</span>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="fax-list" id="fax-list">
+    {% if faxes %}
+    {% for fax in faxes %}
+    <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card" data-fax-id="{{ fax.id }}">
+        <div class="fax-card-header">
+            <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
+            <span class="fax-status badge badge-{{ fax.status }}" data-fax-id="{{ fax.id }}">{{ statuses[fax.status] }}</span>
+        </div>
+        <div class="fax-card-meta">
+            <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
+            {% if fax.sender_name %}
+            <span class="mono-sm text-muted">{{ fax.phone_number }}</span>
+            {% endif %}
+        </div>
+        {% if fax.ocr_text %}
+        <div class="fax-card-preview text-muted">{{ fax.ocr_text[:120] }}{% if fax.ocr_text|length > 120 %}...{% endif %}</div>
+        {% elif fax.ocr_done == 0 %}
+        <div class="fax-card-preview text-muted mono-sm">OCR wird verarbeitet...</div>
+        {% endif %}
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state">
+        <p>{% if search %}Keine Faxe gefunden fuer "{{ search }}"{% elif current_status %}Keine Faxe mit Status "{{ statuses[current_status] }}"{% else %}Noch keine Faxe vorhanden{% endif %}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

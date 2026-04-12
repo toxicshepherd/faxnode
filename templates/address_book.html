@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Adressbuch — FaxNode{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Adressbuch</h1>
+    <button class="btn btn-sm" onclick="toggleAddressForm()">+ Eintrag hinzufuegen</button>
+</div>
+
+<div id="address-form-container" class="card form-card" style="display:none;">
+    <h3>Neuer Eintrag</h3>
+    <form id="address-form" onsubmit="saveAddress(event)">
+        <div class="form-row">
+            <label>Faxnummer</label>
+            <input type="text" name="phone_number" placeholder="z.B. 05721924822" required>
+        </div>
+        <div class="form-row">
+            <label>Name</label>
+            <input type="text" name="name" placeholder="z.B. Grosshandel Phoenix" required>
+        </div>
+        <div class="form-row">
+            <label>Notizen</label>
+            <input type="text" name="notes" placeholder="Optional">
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-sm">Speichern</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="toggleAddressForm()">Abbrechen</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Faxnummer</th>
+                <th>Notizen</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries %}
+            <tr>
+                <td>{{ entry.name }}</td>
+                <td class="mono-sm">{{ entry.phone_number }}</td>
+                <td class="text-muted">{{ entry.notes or '' }}</td>
+                <td><button class="btn btn-sm btn-ghost btn-danger" onclick="deleteAddress({{ entry.id }})">Loeschen</button></td>
+            </tr>
+            {% endfor %}
+            {% if not entries %}
+            <tr><td colspan="4" class="text-muted">Noch keine Eintraege</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

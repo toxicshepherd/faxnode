@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Fax von {{ fax.sender_name or fax.phone_number }} — FaxNode{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="{{ url_for('fax_list') }}" class="btn btn-sm btn-ghost">&larr; Zurueck</a>
+    <h1>{{ fax.sender_name or fax.phone_number }}</h1>
+</div>
+
+<div class="detail-layout">
+    <div class="detail-pdf">
+        <object data="{{ url_for('api_serve_pdf', fax_id=fax.id) }}" type="application/pdf" width="100%" height="100%">
+            <p>PDF kann nicht angezeigt werden. <a href="{{ url_for('api_serve_pdf', fax_id=fax.id) }}" target="_blank">PDF herunterladen</a></p>
+        </object>
+    </div>
+    <div class="detail-sidebar">
+        <div class="detail-meta card">
+            <h3>Details</h3>
+            <div class="meta-row">
+                <span class="meta-label">Absender</span>
+                <span>{{ fax.sender_name or fax.phone_number }}</span>
+            </div>
+            {% if fax.sender_name %}
+            <div class="meta-row">
+                <span class="meta-label">Nummer</span>
+                <span class="mono-sm">{{ fax.phone_number }}</span>
+            </div>
+            {% endif %}
+            <div class="meta-row">
+                <span class="meta-label">Empfangen</span>
+                <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Datei</span>
+                <span class="mono-sm">{{ fax.filename }}</span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">Status</span>
+                <select id="status-select" class="status-select badge-{{ fax.status }}" data-fax-id="{{ fax.id }}">
+                    {% for key, label in statuses.items() %}
+                    <option value="{{ key }}" {% if fax.status == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="meta-row">
+                <button class="btn btn-sm" onclick="printFax({{ fax.id }})">Drucken</button>
+            </div>
+        </div>
+
+        {% if fax.ocr_text %}
+        <div class="detail-ocr card">
+            <h3>Erkannter Text</h3>
+            <pre class="ocr-text">{{ fax.ocr_text }}</pre>
+        </div>
+        {% endif %}
+
+        <div class="detail-notes card">
+            <h3>Notizen</h3>
+            <div id="notes-list">
+                {% for note in notes %}
+                <div class="note">
+                    <div class="note-header">
+                        <span class="note-author">{{ note.author }}</span>
+                        <span class="note-date mono-sm">{{ note.created_at }}</span>
+                    </div>
+                    <div class="note-message">{{ note.message }}</div>
+                </div>
+                {% endfor %}
+                {% if not notes %}
+                <p class="text-muted" id="no-notes">Keine Notizen vorhanden</p>
+                {% endif %}
+            </div>
+            <form id="note-form" class="note-form" data-fax-id="{{ fax.id }}">
+                <input type="text" name="author" placeholder="Name (optional)" class="note-author-input">
+                <textarea name="message" placeholder="Notiz schreiben..." class="note-input" rows="2" required></textarea>
+                <button type="submit" class="btn btn-sm">Hinzufuegen</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
