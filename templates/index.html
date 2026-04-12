@@ -75,23 +75,92 @@
     </div>
     {% endfor %}
     {% else %}
-    <div class="empty-state">
+    <div class="empty-state" id="empty-state">
         <p>{% if search %}Keine Faxe gefunden fuer "{{ search }}"{% elif current_status %}Keine Faxe mit Status "{{ statuses[current_status] }}"{% elif current_category %}Keine Faxe in Kategorie "{{ categories[current_category] }}"{% else %}Noch keine Faxe vorhanden{% endif %}</p>
     </div>
     {% endif %}
 </div>
 
-{% if total_pages > 1 %}
-<div class="pagination">
-    {% if page > 1 %}
-    <a href="{{ url_for('fax_list', page=page-1, status=current_status, category=current_category, q=search or None) }}" class="btn btn-sm btn-ghost">&larr; Zurueck</a>
-    {% endif %}
-    <span class="pagination-info mono-sm">Seite {{ page }} von {{ total_pages }}</span>
-    {% if page < total_pages %}
-    <a href="{{ url_for('fax_list', page=page+1, status=current_status, category=current_category, q=search or None) }}" class="btn btn-sm btn-ghost">Weiter &rarr;</a>
-    {% endif %}
+<div id="load-more" class="load-more" style="display:none;">
+    <button class="btn btn-sm btn-ghost" id="load-more-btn">Mehr laden...</button>
 </div>
-{% endif %}
+<div id="load-spinner" class="load-spinner" style="display:none;">
+    <div class="spinner-bar"></div>
+</div>
 
-<script>var UNREAD_COUNT = {{ unread }};</script>
+<script>
+var UNREAD_COUNT = {{ unread }};
+var _statuses = {{ statuses|tojson }};
+var _categories = {{ categories|tojson }};
+var _page = 1;
+var _loading = false;
+var _done = {{ 'true' if faxes|length < 30 else 'false' }};
+var _status = {{ current_status|tojson if current_status else 'null' }};
+var _category = {{ current_category|tojson if current_category else 'null' }};
+var _search = {{ search|tojson }};
+
+function renderFaxCard(f) {
+    var sender = f.sender_name || f.phone_number;
+    var catLabel = _categories[f.category] || 'Sonstiges';
+    var statusLabel = _statuses[f.status] || f.status;
+    var thumb = f.thumbnail_path
+        ? '<img src="/api/fax/' + f.id + '/thumbnail" alt="Vorschau" loading="lazy">'
+        : '<div class="thumb-placeholder">' + (f.ocr_done === 0 ? '...' : 'PDF') + '</div>';
+    var meta = '<span class="mono-sm">' + escapeHtml((f.received_at || '').replace('T', ' ')) + '</span>';
+    if (f.sender_name) meta += '<span class="mono-sm text-muted">' + escapeHtml(f.phone_number) + '</span>';
+    if (f.page_count > 1) meta += '<span class="mono-sm text-muted">' + f.page_count + ' Seiten</span>';
+    var preview = '';
+    if (f.ocr_text) {
+        var txt = f.ocr_text.length > 150 ? f.ocr_text.substring(0, 150) + '...' : f.ocr_text;
+        preview = '<div class="fax-card-preview text-muted">' + escapeHtml(txt) + '</div>';
+    } else if (f.ocr_done === 0) {
+        preview = '<div class="fax-card-preview text-muted mono-sm">OCR wird verarbeitet...</div>';
+    }
+    return '<div class="fax-card-row" data-fax-id="' + f.id + '">' +
+        '<a href="/faxe/' + f.id + '" class="fax-card-thumb">' + thumb + '</a>' +
+        '<a href="/faxe/' + f.id + '" class="fax-card-content">' +
+        '<div class="fax-card-header"><span class="fax-sender">' + escapeHtml(sender) + '</span>' +
+        '<div class="fax-card-badges"><span class="cat-badge cat-' + f.category + '">' + escapeHtml(catLabel) + '</span>' +
+        '<span class="fax-status badge badge-' + f.status + '" data-fax-id="' + f.id + '">' + escapeHtml(statusLabel) + '</span></div></div>' +
+        '<div class="fax-card-meta">' + meta + '</div>' + preview + '</a>' +
+        '<div class="fax-card-actions"><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); quickPrint(' + f.id + ')" title="Drucken">&#128424;</button></div></div>';
+}
+
+function loadMore() {
+    if (_loading || _done) return;
+    _loading = true;
+    _page++;
+    document.getElementById('load-spinner').style.display = 'flex';
+    document.getElementById('load-more').style.display = 'none';
+    var params = new URLSearchParams({page: _page});
+    if (_status) params.set('status', _status);
+    if (_category) params.set('category', _category);
+    if (_search) params.set('q', _search);
+    fetch('/api/faxe?' + params.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(faxes) {
+            document.getElementById('load-spinner').style.display = 'none';
+            if (faxes.length === 0) { _done = true; return; }
+            if (faxes.length < 30) _done = true;
+            var list = document.getElementById('fax-list');
+            faxes.forEach(function(f) {
+                list.insertAdjacentHTML('beforeend', renderFaxCard(f));
+            });
+            if (!_done) document.getElementById('load-more').style.display = 'flex';
+            _loading = false;
+        });
+}
+
+// Infinite Scroll: lade mehr wenn nahe am Ende
+if (!_done) {
+    document.getElementById('load-more').style.display = 'flex';
+    document.querySelector('.content').addEventListener('scroll', function() {
+        var el = this;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
+            loadMore();
+        }
+    });
+    document.getElementById('load-more-btn').addEventListener('click', loadMore);
+}
+</script>
 {% endblock %}

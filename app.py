@@ -1,7 +1,9 @@
 """FaxNode – Flask App."""
 import json
+import os
 import queue
 import threading
+from pathlib import Path
 from flask import (
     Flask, Response, render_template, request, jsonify,
     redirect, url_for, send_file, abort
@@ -11,6 +13,12 @@ import config
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
+
+
+def is_setup_done():
+    """Pruefen ob die Ersteinrichtung abgeschlossen ist."""
+    env_file = Path(config.BASE_DIR) / ".env"
+    return env_file.exists() and os.path.getsize(env_file) > 0
 
 # --- SSE ---
 
@@ -61,10 +69,71 @@ def events():
     )
 
 
+# --- Setup Wizard ---
+
+@app.route("/setup")
+def setup():
+    if is_setup_done():
+        return redirect(url_for("fax_list"))
+    return render_template("setup.html")
+
+
+@app.route("/api/setup/test-dir", methods=["POST"])
+def api_setup_test_dir():
+    data = request.get_json()
+    path = data.get("path", "").strip()
+    if not path:
+        return jsonify({"ok": False, "error": "Pfad darf nicht leer sein"})
+    if not os.path.isdir(path):
+        return jsonify({"ok": False, "error": "Verzeichnis existiert nicht"})
+    try:
+        files = [f for f in os.listdir(path) if f.lower().endswith(".pdf")]
+        return jsonify({"ok": True, "pdf_count": len(files)})
+    except PermissionError:
+        return jsonify({"ok": False, "error": "Keine Leseberechtigung"})
+
+
+@app.route("/api/setup/test-printers")
+def api_setup_test_printers():
+    try:
+        from printer import get_printers
+        printers = get_printers()
+        return jsonify({"ok": True, "printers": list(printers.keys())})
+    except Exception as e:
+        return jsonify({"ok": False, "printers": [], "error": str(e)})
+
+
+@app.route("/api/setup/save", methods=["POST"])
+def api_setup_save():
+    data = request.get_json()
+    fax_dir = data.get("fax_dir", "").strip()
+    if not fax_dir or not os.path.isdir(fax_dir):
+        return jsonify({"ok": False, "error": "Ungueltiges Fax-Verzeichnis"})
+
+    # .env schreiben
+    env_path = Path(config.BASE_DIR) / ".env"
+    lines = [
+        f"FAX_WATCH_DIR={fax_dir}",
+        f"SECRET_KEY={config.SECRET_KEY}",
+    ]
+    env_path.write_text("\n".join(lines) + "\n")
+
+    # Config im Speicher aktualisieren
+    config.FAX_WATCH_DIR = fax_dir
+
+    # DB initialisieren und Hintergrund-Services starten
+    db.init_db()
+    start_background_services()
+
+    return jsonify({"ok": True})
+
+
 # --- Seiten ---
 
 @app.route("/")
 def index():
+    if not is_setup_done():
+        return redirect(url_for("setup"))
     return redirect(url_for("fax_list"))
 
 
@@ -245,6 +314,19 @@ def api_serve_thumbnail(fax_id):
     return send_file(fax["thumbnail_path"], mimetype="image/png")
 
 
+@app.route("/api/faxe")
+def api_fax_list():
+    """JSON-API fuer Infinite Scroll."""
+    status_filter = request.args.get("status")
+    category_filter = request.args.get("category")
+    search = request.args.get("q")
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 30
+    offset = (page - 1) * per_page
+    faxes = db.get_faxes(status=status_filter, category=category_filter, archived=0, search=search, limit=per_page, offset=offset)
+    return jsonify([dict(f) for f in faxes])
+
+
 @app.route("/api/unread")
 def api_unread_count():
     return jsonify({"count": db.get_unread_count()})
@@ -326,7 +408,8 @@ def start_background_services():
 
 with app.app_context():
     db.init_db()
-    start_background_services()
+    if is_setup_done():
+        start_background_services()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaxNode — Einrichtung</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0e14;
+            --bg-elevated: #111820;
+            --bg-hover: #1a2230;
+            --border: #1e2a3a;
+            --accent: #39d353;
+            --accent-dim: rgba(57, 211, 83, 0.15);
+            --text: #e6edf3;
+            --text-muted: #7d8590;
+            --danger: #f85149;
+            --info: #58a6ff;
+            --font-sans: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --radius: 8px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .setup-container {
+            width: 100%;
+            max-width: 560px;
+            padding: 2rem;
+        }
+        .setup-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        .setup-header .logo {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .setup-header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+        .setup-header p {
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+        .setup-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .setup-card h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .setup-card .step-desc {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1.25rem;
+        }
+        .step { display: none; }
+        .step.active { display: block; }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 0.4rem;
+            color: var(--text-muted);
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.65rem 0.85rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.2rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--bg-elevated);
+            color: var(--text);
+            font-family: var(--font-sans);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+        .btn-primary:hover { opacity: 0.9; background: var(--accent); }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+        .test-result {
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.85rem;
+            border-radius: var(--radius);
+            font-size: 0.85rem;
+            font-family: var(--font-mono);
+            display: none;
+        }
+        .test-result.success {
+            display: block;
+            background: rgba(57, 211, 83, 0.1);
+            border: 1px solid rgba(57, 211, 83, 0.3);
+            color: var(--accent);
+        }
+        .test-result.error {
+            display: block;
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+            color: var(--danger);
+        }
+        .printer-list {
+            margin-top: 0.75rem;
+        }
+        .printer-item {
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+        .steps-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        .step-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+            transition: all 0.3s ease;
+        }
+        .step-dot.active { background: var(--accent); }
+        .step-dot.done { background: var(--accent); opacity: 0.5; }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .success-icon { font-size: 3rem; text-align: center; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="setup-header">
+            <div class="logo">&#9906;</div>
+            <h1>FaxNode</h1>
+            <p>Ersteinrichtung</p>
+        </div>
+
+        <div class="steps-indicator">
+            <div class="step-dot active" data-step="0"></div>
+            <div class="step-dot" data-step="1"></div>
+            <div class="step-dot" data-step="2"></div>
+        </div>
+
+        <!-- Step 1: Willkommen -->
+        <div class="step active" data-step="0">
+            <div class="setup-card">
+                <h2>Willkommen</h2>
+                <p class="step-desc">
+                    FaxNode verwaltet eingehende Faxe von deiner FritzBox.
+                    PDFs werden automatisch indiziert, per OCR durchsuchbar gemacht und koennen direkt gedruckt werden.
+                </p>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem;">
+                    Voraussetzungen:<br>
+                    &bull; FritzBox-NAS ist gemountet (z.B. /mnt/nas/faxe)<br>
+                    &bull; Tesseract OCR ist installiert<br>
+                    &bull; Optional: CUPS fuer Druckeranbindung
+                </p>
+                <div class="btn-row">
+                    <span></span>
+                    <button class="btn btn-primary" onclick="goStep(1)">Einrichtung starten</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Fax-Verzeichnis -->
+        <div class="step" data-step="1">
+            <div class="setup-card">
+                <h2>Fax-Verzeichnis</h2>
+                <p class="step-desc">Wo speichert die FritzBox die eingehenden Faxe?</p>
+                <div class="form-group">
+                    <label>Pfad zum Fax-Ordner</label>
+                    <input type="text" id="fax-dir" value="/mnt/nas/faxe" placeholder="/mnt/nas/faxe">
+                </div>
+                <button class="btn" onclick="testDir()" id="test-dir-btn">Verzeichnis pruefen</button>
+                <div class="test-result" id="dir-result"></div>
+                <div class="btn-row">
+                    <button class="btn" onclick="goStep(0)">Zurueck</button>
+                    <button class="btn btn-primary" onclick="goStep(2)" id="dir-next-btn" disabled>Weiter</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Drucker + Abschluss -->
+        <div class="step" data-step="2">
+            <div class="setup-card">
+                <h2>Drucker</h2>
+                <p class="step-desc">Erkannte CUPS-Drucker im Netzwerk. Drucker koennen spaeter in den Einstellungen konfiguriert werden.</p>
+                <button class="btn" onclick="testPrinters()" id="test-printer-btn">Drucker suchen</button>
+                <div class="printer-list" id="printer-list"></div>
+                <div class="test-result" id="printer-result"></div>
+            </div>
+            <div class="setup-card">
+                <h2>Einrichtung abschliessen</h2>
+                <p class="step-desc">
+                    FaxNode wird mit den folgenden Einstellungen konfiguriert.
+                    Alles Weitere kann spaeter in den Einstellungen angepasst werden.
+                </p>
+                <div style="background: var(--bg-dark); padding: 0.75rem; border-radius: var(--radius); font-family: var(--font-mono); font-size: 0.85rem; margin-bottom: 1rem;">
+                    <div>FAX_WATCH_DIR = <span id="summary-dir" style="color: var(--accent);"></span></div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn" onclick="goStep(1)">Zurueck</button>
+                    <button class="btn btn-primary" onclick="saveSetup()" id="save-btn">Setup abschliessen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    var currentStep = 0;
+    var dirValid = false;
+
+    function goStep(n) {
+        document.querySelectorAll('.step').forEach(function(el) { el.classList.remove('active'); });
+        document.querySelector('.step[data-step="' + n + '"]').classList.add('active');
+        document.querySelectorAll('.step-dot').forEach(function(dot, i) {
+            dot.classList.remove('active', 'done');
+            if (i === n) dot.classList.add('active');
+            else if (i < n) dot.classList.add('done');
+        });
+        currentStep = n;
+        if (n === 2) {
+            document.getElementById('summary-dir').textContent = document.getElementById('fax-dir').value;
+        }
+    }
+
+    function testDir() {
+        var path = document.getElementById('fax-dir').value.trim();
+        var btn = document.getElementById('test-dir-btn');
+        var result = document.getElementById('dir-result');
+        btn.innerHTML = '<span class="spinner"></span> Pruefen...';
+        btn.disabled = true;
+
+        fetch('/api/setup/test-dir', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({path: path})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            btn.innerHTML = 'Verzeichnis pruefen';
+            btn.disabled = false;
+            if (d.ok) {
+                result.className = 'test-result success';
+                result.textContent = 'Verzeichnis gefunden — ' + d.pdf_count + ' PDF-Dateien erkannt';
+                dirValid = true;
+                document.getElementById('dir-next-btn').disabled = false;
+            } else {
+                result.className = 'test-result error';
+                result.textContent = d.error;
+                dirValid = false;
+                document.getElementById('dir-next-btn').disabled = true;
+            }
+        });
+    }
+
+    function testPrinters() {
+        var btn = document.getElementById('test-printer-btn');
+        var list = document.getElementById('printer-list');
+        var result = document.getElementById('printer-result');
+        btn.innerHTML = '<span class="spinner"></span> Suchen...';
+        btn.disabled = true;
+        list.innerHTML = '';
+        result.style.display = 'none';
+
+        fetch('/api/setup/test-printers').then(function(r) { return r.json(); }).then(function(d) {
+            btn.innerHTML = 'Drucker suchen';
+            btn.disabled = false;
+            if (d.ok && d.printers.length > 0) {
+                d.printers.forEach(function(name) {
+                    var div = document.createElement('div');
+                    div.className = 'printer-item';
+                    div.textContent = name;
+                    list.appendChild(div);
+                });
+            } else if (d.ok) {
+                result.className = 'test-result error';
+                result.textContent = 'Keine Drucker gefunden. CUPS-Drucker koennen spaeter eingerichtet werden.';
+            } else {
+                result.className = 'test-result error';
+                result.textContent = 'CUPS nicht verfuegbar: ' + (d.error || 'unbekannter Fehler');
+            }
+        });
+    }
+
+    function saveSetup() {
+        var btn = document.getElementById('save-btn');
+        var faxDir = document.getElementById('fax-dir').value.trim();
+        btn.innerHTML = '<span class="spinner"></span> Wird eingerichtet...';
+        btn.disabled = true;
+
+        fetch('/api/setup/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fax_dir: faxDir})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok) {
+                document.querySelector('.setup-container').innerHTML =
+                    '<div style="text-align:center;">' +
+                    '<div class="success-icon" style="color:var(--accent);">&#10003;</div>' +
+                    '<h1 style="margin-bottom:0.5rem;">Einrichtung abgeschlossen</h1>' +
+                    '<p style="color:var(--text-muted);margin-bottom:2rem;">FaxNode indiziert jetzt die vorhandenen Faxe. Die Vorschaubilder werden im Hintergrund erstellt.</p>' +
+                    '<a href="/" class="btn btn-primary" style="text-decoration:none;">FaxNode oeffnen</a>' +
+                    '</div>';
+            } else {
+                btn.innerHTML = 'Setup abschliessen';
+                btn.disabled = false;
+                alert('Fehler: ' + d.error);
+            }
+        });
+    }
+    </script>
+</body>
+</html>
