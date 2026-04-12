@@ -43,6 +43,14 @@
                 </select>
             </div>
             <div class="meta-row">
+                <span class="meta-label">Kategorie</span>
+                <select id="category-select" class="status-select" data-fax-id="{{ fax.id }}">
+                    {% for key, label in categories.items() %}
+                    <option value="{{ key }}" {% if fax.category == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="meta-row">
                 <button class="btn btn-sm" onclick="printFax({{ fax.id }})">Drucken</button>
             </div>
         </div>

@@ -12,8 +12,10 @@ CREATE TABLE IF NOT EXISTS faxes (
     phone_number TEXT NOT NULL,
     received_at TIMESTAMP NOT NULL,
     status TEXT NOT NULL DEFAULT 'neu',
+    category TEXT NOT NULL DEFAULT 'sonstiges',
     ocr_text TEXT,
     ocr_done INTEGER DEFAULT 0,
+    thumbnail_path TEXT,
     file_path TEXT NOT NULL,
     file_size INTEGER,
     page_count INTEGER DEFAULT 1,
@@ -26,6 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_faxes_status ON faxes(status);
 CREATE INDEX IF NOT EXISTS idx_faxes_phone ON faxes(phone_number);
 CREATE INDEX IF NOT EXISTS idx_faxes_received ON faxes(received_at);
 CREATE INDEX IF NOT EXISTS idx_faxes_archived ON faxes(archived);
+CREATE INDEX IF NOT EXISTS idx_faxes_category ON faxes(category);
 
 -- Volltextsuche (FTS5)
 CREATE VIRTUAL TABLE IF NOT EXISTS faxes_fts USING fts5(
@@ -62,6 +65,7 @@ CREATE TABLE IF NOT EXISTS address_book (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     phone_number TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
+    default_category TEXT NOT NULL DEFAULT 'sonstiges',
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -109,11 +113,25 @@ def init_db():
     """Datenbank initialisieren."""
     with db_connection() as conn:
         conn.executescript(SCHEMA)
+        # Migrationen fuer bestehende DBs
+        _migrate(conn)
+
+
+def _migrate(conn):
+    """Spalten hinzufuegen falls sie fehlen (fuer Updates)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(faxes)").fetchall()}
+    if "category" not in cols:
+        conn.execute("ALTER TABLE faxes ADD COLUMN category TEXT NOT NULL DEFAULT 'sonstiges'")
+    if "thumbnail_path" not in cols:
+        conn.execute("ALTER TABLE faxes ADD COLUMN thumbnail_path TEXT")
+    addr_cols = {r[1] for r in conn.execute("PRAGMA table_info(address_book)").fetchall()}
+    if "default_category" not in addr_cols:
+        conn.execute("ALTER TABLE address_book ADD COLUMN default_category TEXT NOT NULL DEFAULT 'sonstiges'")
 
 
 # --- Fax Queries ---
 
-def get_faxes(status=None, archived=0, search=None, limit=100, offset=0):
+def get_faxes(status=None, category=None, archived=0, search=None, limit=100, offset=0):
     """Faxe abfragen mit optionalen Filtern."""
     with db_connection() as conn:
         if search:
@@ -144,6 +162,10 @@ def get_faxes(status=None, archived=0, search=None, limit=100, offset=0):
             query += " AND f.status = ?"
             params.append(status)
 
+        if category:
+            query += " AND f.category = ?"
+            params.append(category)
+
         query += " ORDER BY f.received_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
@@ -162,14 +184,14 @@ def get_fax(fax_id):
         ).fetchone()
 
 
-def insert_fax(filename, phone_number, received_at, file_path, file_size, page_count=1):
+def insert_fax(filename, phone_number, received_at, file_path, file_size, page_count=1, category="sonstiges"):
     """Neues Fax einfuegen."""
     with db_connection() as conn:
         cursor = conn.execute(
             """INSERT OR IGNORE INTO faxes
-               (filename, phone_number, received_at, file_path, file_size, page_count)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (filename, phone_number, received_at, file_path, file_size, page_count)
+               (filename, phone_number, received_at, file_path, file_size, page_count, category)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (filename, phone_number, received_at, file_path, file_size, page_count, category)
         )
         return cursor.lastrowid if cursor.rowcount > 0 else None
 
@@ -242,15 +264,15 @@ def get_address_entry(phone_number):
         ).fetchone()
 
 
-def upsert_address(phone_number, name, notes=None):
+def upsert_address(phone_number, name, default_category="sonstiges", notes=None):
     """Adressbuch-Eintrag anlegen oder aktualisieren."""
     with db_connection() as conn:
         conn.execute(
-            """INSERT INTO address_book (phone_number, name, notes)
-               VALUES (?, ?, ?)
+            """INSERT INTO address_book (phone_number, name, default_category, notes)
+               VALUES (?, ?, ?, ?)
                ON CONFLICT(phone_number)
-               DO UPDATE SET name = ?, notes = ?, updated_at = CURRENT_TIMESTAMP""",
-            (phone_number, name, notes, name, notes)
+               DO UPDATE SET name = ?, default_category = ?, notes = ?, updated_at = CURRENT_TIMESTAMP""",
+            (phone_number, name, default_category, notes, name, default_category, notes)
         )
 
 
@@ -296,3 +318,101 @@ def delete_print_rule(rule_id):
     """Druckregel loeschen."""
     with db_connection() as conn:
         conn.execute("DELETE FROM print_rules WHERE id = ?", (rule_id,))
+
+
+# --- Kategorien ---
+
+def update_fax_category(fax_id, category):
+    """Fax-Kategorie aendern."""
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE faxes SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (category, fax_id)
+        )
+
+
+def get_fax_count_by_category(archived=0):
+    """Anzahl Faxe pro Kategorie."""
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT category, COUNT(*) as cnt FROM faxes WHERE archived = ? GROUP BY category",
+            (archived,)
+        ).fetchall()
+        return {row["category"]: row["cnt"] for row in rows}
+
+
+def get_unread_count():
+    """Anzahl ungelesener Faxe (Status 'neu')."""
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM faxes WHERE status = 'neu' AND archived = 0"
+        ).fetchone()
+        return row["cnt"]
+
+
+# --- Thumbnails ---
+
+def update_fax_thumbnail(fax_id, thumbnail_path):
+    """Thumbnail-Pfad fuer ein Fax speichern."""
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE faxes SET thumbnail_path = ? WHERE id = ?",
+            (thumbnail_path, fax_id)
+        )
+
+
+# --- Statistiken ---
+
+def get_stats_faxes_per_week(weeks=12):
+    """Faxe pro Woche (letzte N Wochen)."""
+    with db_connection() as conn:
+        return conn.execute(
+            """SELECT strftime('%Y-W%W', received_at) as week,
+                      COUNT(*) as cnt
+               FROM faxes
+               WHERE received_at >= datetime('now', ?)
+               GROUP BY week ORDER BY week ASC""",
+            (f"-{weeks * 7} days",)
+        ).fetchall()
+
+
+def get_stats_top_senders(limit=10):
+    """Top-Absender nach Anzahl Faxe."""
+    with db_connection() as conn:
+        return conn.execute(
+            """SELECT f.phone_number, ab.name as sender_name, COUNT(*) as cnt
+               FROM faxes f
+               LEFT JOIN address_book ab ON f.phone_number = ab.phone_number
+               GROUP BY f.phone_number
+               ORDER BY cnt DESC LIMIT ?""",
+            (limit,)
+        ).fetchall()
+
+
+def get_stats_categories():
+    """Faxe pro Kategorie (alle, nicht nur aktive)."""
+    with db_connection() as conn:
+        return conn.execute(
+            "SELECT category, COUNT(*) as cnt FROM faxes GROUP BY category ORDER BY cnt DESC"
+        ).fetchall()
+
+
+def get_stats_overview():
+    """Allgemeine Statistiken."""
+    with db_connection() as conn:
+        total = conn.execute("SELECT COUNT(*) as cnt FROM faxes").fetchone()["cnt"]
+        active = conn.execute("SELECT COUNT(*) as cnt FROM faxes WHERE archived = 0").fetchone()["cnt"]
+        archived = conn.execute("SELECT COUNT(*) as cnt FROM faxes WHERE archived = 1").fetchone()["cnt"]
+        today = conn.execute(
+            "SELECT COUNT(*) as cnt FROM faxes WHERE date(received_at) = date('now')"
+        ).fetchone()["cnt"]
+        this_week = conn.execute(
+            "SELECT COUNT(*) as cnt FROM faxes WHERE received_at >= datetime('now', '-7 days')"
+        ).fetchone()["cnt"]
+        return {
+            "total": total,
+            "active": active,
+            "archived": archived,
+            "today": today,
+            "this_week": this_week,
+        }

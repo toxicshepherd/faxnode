@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Statistik — FaxNode{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Statistik</h1>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card card">
+        <div class="stat-value">{{ overview.today }}</div>
+        <div class="stat-label">Heute</div>
+    </div>
+    <div class="stat-card card">
+        <div class="stat-value">{{ overview.this_week }}</div>
+        <div class="stat-label">Diese Woche</div>
+    </div>
+    <div class="stat-card card">
+        <div class="stat-value">{{ overview.active }}</div>
+        <div class="stat-label">Aktiv</div>
+    </div>
+    <div class="stat-card card">
+        <div class="stat-value">{{ overview.archived }}</div>
+        <div class="stat-label">Archiviert</div>
+    </div>
+    <div class="stat-card card">
+        <div class="stat-value">{{ overview.total }}</div>
+        <div class="stat-label">Gesamt</div>
+    </div>
+</div>
+
+<div class="stats-sections">
+    <div class="card">
+        <h3>Faxe pro Woche</h3>
+        {% if per_week %}
+        <div class="bar-chart">
+            {% set max_val = per_week|map(attribute='cnt')|max %}
+            {% for row in per_week %}
+            <div class="bar-row">
+                <span class="bar-label mono-sm">{{ row.week }}</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width: {{ (row.cnt / max_val * 100)|int }}%"></div>
+                </div>
+                <span class="bar-value mono-sm">{{ row.cnt }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">Noch keine Daten</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Top Absender</h3>
+        {% if top_senders %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Absender</th>
+                    <th>Nummer</th>
+                    <th>Anzahl</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in top_senders %}
+                <tr>
+                    <td>{{ row.sender_name or '–' }}</td>
+                    <td class="mono-sm">{{ row.phone_number }}</td>
+                    <td class="mono-sm">{{ row.cnt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">Noch keine Daten</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Nach Kategorie</h3>
+        {% if cat_stats %}
+        <div class="bar-chart">
+            {% set max_cat = cat_stats|map(attribute='cnt')|max %}
+            {% for row in cat_stats %}
+            <div class="bar-row">
+                <span class="bar-label"><span class="cat-badge cat-{{ row.category }}">{{ categories.get(row.category, row.category) }}</span></span>
+                <div class="bar-track">
+                    <div class="bar-fill bar-fill-{{ row.category }}" style="width: {{ (row.cnt / max_cat * 100)|int }}%"></div>
+                </div>
+                <span class="bar-value mono-sm">{{ row.cnt }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">Noch keine Daten</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

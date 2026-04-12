@@ -5,24 +5,32 @@
 <div class="page-header">
     <h1>Faxe</h1>
     <form class="search-form" action="{{ url_for('fax_list') }}" method="get">
-        {% if current_status %}
-        <input type="hidden" name="status" value="{{ current_status }}">
-        {% endif %}
+        {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+        {% if current_category %}<input type="hidden" name="category" value="{{ current_category }}">{% endif %}
         <input type="text" name="q" value="{{ search }}" placeholder="Suche (Absender, Nummer, Inhalt...)" class="search-input">
         <button type="submit" class="btn btn-sm">Suchen</button>
         {% if search %}
-        <a href="{{ url_for('fax_list', status=current_status) }}" class="btn btn-sm btn-ghost">Zuruecksetzen</a>
+        <a href="{{ url_for('fax_list', status=current_status, category=current_category) }}" class="btn btn-sm btn-ghost">Zuruecksetzen</a>
         {% endif %}
     </form>
 </div>
 
 <div class="status-tabs">
-    <a href="{{ url_for('fax_list', q=search or None) }}" class="tab {% if not current_status %}active{% endif %}">
+    <a href="{{ url_for('fax_list', q=search or None, category=current_category) }}" class="tab {% if not current_status %}active{% endif %}">
         Alle <span class="tab-count">{{ total }}</span>
     </a>
     {% for key, label in statuses.items() %}
-    <a href="{{ url_for('fax_list', status=key, q=search or None) }}" class="tab {% if current_status == key %}active{% endif %}">
+    <a href="{{ url_for('fax_list', status=key, q=search or None, category=current_category) }}" class="tab {% if current_status == key %}active{% endif %}">
         {{ label }} <span class="tab-count">{{ counts.get(key, 0) }}</span>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="category-tabs">
+    <a href="{{ url_for('fax_list', q=search or None, status=current_status) }}" class="cat-tab {% if not current_category %}active{% endif %}">Alle</a>
+    {% for key, label in categories.items() %}
+    <a href="{{ url_for('fax_list', category=key, q=search or None, status=current_status) }}" class="cat-tab cat-{{ key }} {% if current_category == key %}active{% endif %}">
+        {{ label }} <span class="tab-count">{{ cat_counts.get(key, 0) }}</span>
     </a>
     {% endfor %}
 </div>
@@ -30,28 +38,48 @@
 <div class="fax-list" id="fax-list">
     {% if faxes %}
     {% for fax in faxes %}
-    <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card" data-fax-id="{{ fax.id }}">
-        <div class="fax-card-header">
-            <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
-            <span class="fax-status badge badge-{{ fax.status }}" data-fax-id="{{ fax.id }}">{{ statuses[fax.status] }}</span>
-        </div>
-        <div class="fax-card-meta">
-            <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
-            {% if fax.sender_name %}
-            <span class="mono-sm text-muted">{{ fax.phone_number }}</span>
+    <div class="fax-card-row" data-fax-id="{{ fax.id }}">
+        <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-thumb">
+            {% if fax.thumbnail_path %}
+            <img src="{{ url_for('api_serve_thumbnail', fax_id=fax.id) }}" alt="Vorschau" loading="lazy">
+            {% else %}
+            <div class="thumb-placeholder">{% if fax.ocr_done == 0 %}...{% else %}PDF{% endif %}</div>
             {% endif %}
+        </a>
+        <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-content">
+            <div class="fax-card-header">
+                <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
+                <div class="fax-card-badges">
+                    <span class="cat-badge cat-{{ fax.category }}">{{ categories.get(fax.category, 'Sonstiges') }}</span>
+                    <span class="fax-status badge badge-{{ fax.status }}" data-fax-id="{{ fax.id }}">{{ statuses[fax.status] }}</span>
+                </div>
+            </div>
+            <div class="fax-card-meta">
+                <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
+                {% if fax.sender_name %}
+                <span class="mono-sm text-muted">{{ fax.phone_number }}</span>
+                {% endif %}
+                {% if fax.page_count > 1 %}
+                <span class="mono-sm text-muted">{{ fax.page_count }} Seiten</span>
+                {% endif %}
+            </div>
+            {% if fax.ocr_text %}
+            <div class="fax-card-preview text-muted">{{ fax.ocr_text[:150] }}{% if fax.ocr_text|length > 150 %}...{% endif %}</div>
+            {% elif fax.ocr_done == 0 %}
+            <div class="fax-card-preview text-muted mono-sm">OCR wird verarbeitet...</div>
+            {% endif %}
+        </a>
+        <div class="fax-card-actions">
+            <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken">&#128424;</button>
         </div>
-        {% if fax.ocr_text %}
-        <div class="fax-card-preview text-muted">{{ fax.ocr_text[:120] }}{% if fax.ocr_text|length > 120 %}...{% endif %}</div>
-        {% elif fax.ocr_done == 0 %}
-        <div class="fax-card-preview text-muted mono-sm">OCR wird verarbeitet...</div>
-        {% endif %}
-    </a>
+    </div>
     {% endfor %}
     {% else %}
     <div class="empty-state">
-        <p>{% if search %}Keine Faxe gefunden fuer "{{ search }}"{% elif current_status %}Keine Faxe mit Status "{{ statuses[current_status] }}"{% else %}Noch keine Faxe vorhanden{% endif %}</p>
+        <p>{% if search %}Keine Faxe gefunden fuer "{{ search }}"{% elif current_status %}Keine Faxe mit Status "{{ statuses[current_status] }}"{% elif current_category %}Keine Faxe in Kategorie "{{ categories[current_category] }}"{% else %}Noch keine Faxe vorhanden{% endif %}</p>
     </div>
     {% endif %}
 </div>
+
+<script>var UNREAD_COUNT = {{ unread }};</script>
 {% endblock %}

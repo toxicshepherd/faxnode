@@ -19,6 +19,16 @@
             <input type="text" name="name" placeholder="z.B. Grosshandel Phoenix" required>
         </div>
         <div class="form-row">
+            <label>Standard-Kategorie</label>
+            <select name="default_category">
+                <option value="sonstiges">Sonstiges</option>
+                <option value="rezept">Rezept</option>
+                <option value="bestellung">Bestellung</option>
+                <option value="lieferschein">Lieferschein</option>
+                <option value="rueckruf">Rueckruf</option>
+            </select>
+        </div>
+        <div class="form-row">
             <label>Notizen</label>
             <input type="text" name="notes" placeholder="Optional">
         </div>
@@ -35,6 +45,7 @@
             <tr>
                 <th>Name</th>
                 <th>Faxnummer</th>
+                <th>Kategorie</th>
                 <th>Notizen</th>
                 <th></th>
             </tr>
@@ -44,12 +55,13 @@
             <tr>
                 <td>{{ entry.name }}</td>
                 <td class="mono-sm">{{ entry.phone_number }}</td>
+                <td><span class="cat-badge cat-{{ entry.default_category }}">{{ entry.default_category|capitalize }}</span></td>
                 <td class="text-muted">{{ entry.notes or '' }}</td>
                 <td><button class="btn btn-sm btn-ghost btn-danger" onclick="deleteAddress({{ entry.id }})">Loeschen</button></td>
             </tr>
             {% endfor %}
             {% if not entries %}
-            <tr><td colspan="4" class="text-muted">Noch keine Eintraege</td></tr>
+            <tr><td colspan="5" class="text-muted">Noch keine Eintraege</td></tr>
             {% endif %}
         </tbody>
     </table>

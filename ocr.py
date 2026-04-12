@@ -1,4 +1,5 @@
-"""FaxNode – OCR Worker (Tesseract)."""
+"""FaxNode – OCR Worker (Tesseract) + Thumbnail-Generierung."""
+import os
 import queue
 import threading
 import logging
@@ -38,6 +39,11 @@ def _ocr_worker():
             full_text = "\n\n".join(texts)
             page_count = len(images)
 
+            # Thumbnail generieren (erste Seite, 200px breit)
+            thumbnail_path = _generate_thumbnail(fax_id, images[0])
+            if thumbnail_path:
+                db.update_fax_thumbnail(fax_id, thumbnail_path)
+
             # DB Update
             db.update_fax_ocr(fax_id, full_text, ocr_done=1)
             with db.db_connection() as conn:
@@ -66,6 +72,22 @@ def _ocr_worker():
 
         finally:
             ocr_queue.task_done()
+
+
+def _generate_thumbnail(fax_id, image):
+    """Thumbnail aus der ersten PDF-Seite generieren."""
+    try:
+        thumb_dir = config.THUMBNAIL_DIR
+        os.makedirs(thumb_dir, exist_ok=True)
+        thumb_path = os.path.join(thumb_dir, f"{fax_id}.png")
+        thumb = image.copy()
+        thumb.thumbnail((200, 280))
+        thumb.save(thumb_path, "PNG", optimize=True)
+        logger.debug("Thumbnail erstellt: %s", thumb_path)
+        return thumb_path
+    except Exception as e:
+        logger.warning("Thumbnail-Generierung fehlgeschlagen: %s", e)
+        return None
 
 
 def start_ocr_worker(broadcast_fn):

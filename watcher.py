@@ -66,18 +66,23 @@ def process_file(file_path):
     except OSError:
         pass
 
+    # Auto-Kategorie aus Adressbuch
+    entry = db.get_address_entry(parsed["phone_number"])
+    category = entry["default_category"] if entry else "sonstiges"
+
     fax_id = db.insert_fax(
         filename=filename,
         phone_number=parsed["phone_number"],
         received_at=parsed["received_at"],
         file_path=file_path,
         file_size=file_size,
+        category=category,
     )
 
     if fax_id is None:
         return  # Bereits in DB
 
-    logger.info("Neues Fax: %s von %s", filename, parsed["phone_number"])
+    logger.info("Neues Fax: %s von %s (Kategorie: %s)", filename, parsed["phone_number"], category)
 
     # OCR einreihen
     if _ocr_queue is not None:
@@ -88,7 +93,6 @@ def process_file(file_path):
 
     # SSE broadcast
     if _broadcast:
-        entry = db.get_address_entry(parsed["phone_number"])
         sender_name = entry["name"] if entry else None
         _broadcast("new_fax", {
             "id": fax_id,
@@ -125,12 +129,15 @@ def sync_directory():
             file_path = os.path.join(watch_dir, filename)
             parsed = parse_filename(filename)
             if parsed:
+                entry = db.get_address_entry(parsed["phone_number"])
+                category = entry["default_category"] if entry else "sonstiges"
                 fax_id = db.insert_fax(
                     filename=filename,
                     phone_number=parsed["phone_number"],
                     received_at=parsed["received_at"],
                     file_path=file_path,
                     file_size=os.path.getsize(file_path),
+                    category=category,
                 )
                 if fax_id and _ocr_queue is not None:
                     _ocr_queue.put(fax_id)

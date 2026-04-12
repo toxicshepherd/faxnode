@@ -39,3 +39,14 @@ FAX_STATUSES = {
     "bearbeitet": "Bearbeitet",
     "erledigt": "Erledigt",
 }
+
+FAX_CATEGORIES = {
+    "rezept": "Rezept",
+    "bestellung": "Bestellung",
+    "lieferschein": "Lieferschein",
+    "rueckruf": "Rueckruf",
+    "sonstiges": "Sonstiges",
+}
+
+# Thumbnail-Verzeichnis
+THUMBNAIL_DIR = str(BASE_DIR / "data" / "thumbnails")

@@ -27,6 +27,10 @@
                     <span class="nav-icon">&#128451;</span>
                     <span>Archiv</span>
                 </a>
+                <a href="{{ url_for('statistics') }}" class="nav-item {% if request.endpoint == 'statistics' %}active{% endif %}">
+                    <span class="nav-icon">&#128202;</span>
+                    <span>Statistik</span>
+                </a>
                 <a href="{{ url_for('address_book') }}" class="nav-item {% if request.endpoint == 'address_book' %}active{% endif %}">
                     <span class="nav-icon">&#128213;</span>
                     <span>Adressbuch</span>

@@ -71,18 +71,25 @@ def index():
 @app.route("/faxe")
 def fax_list():
     status_filter = request.args.get("status")
+    category_filter = request.args.get("category")
     search = request.args.get("q")
-    faxes = db.get_faxes(status=status_filter, archived=0, search=search)
+    faxes = db.get_faxes(status=status_filter, category=category_filter, archived=0, search=search)
     counts = db.get_fax_count_by_status(archived=0)
+    cat_counts = db.get_fax_count_by_category(archived=0)
     total = sum(counts.values())
+    unread = counts.get("neu", 0)
     return render_template(
         "index.html",
         faxes=faxes,
         counts=counts,
+        cat_counts=cat_counts,
         total=total,
+        unread=unread,
         current_status=status_filter,
+        current_category=category_filter,
         search=search or "",
         statuses=config.FAX_STATUSES,
+        categories=config.FAX_CATEGORIES,
     )
 
 
@@ -97,6 +104,7 @@ def fax_detail(fax_id):
         fax=fax,
         notes=notes,
         statuses=config.FAX_STATUSES,
+        categories=config.FAX_CATEGORIES,
     )
 
 
@@ -195,15 +203,61 @@ def api_list_printers():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/fax/<int:fax_id>/kategorie", methods=["POST"])
+def api_update_category(fax_id):
+    data = request.get_json()
+    category = data.get("category")
+    if category not in config.FAX_CATEGORIES:
+        return jsonify({"error": "Ungueltige Kategorie"}), 400
+    db.update_fax_category(fax_id, category)
+    fax = db.get_fax(fax_id)
+    broadcast("category_changed", {
+        "fax_id": fax_id,
+        "category": category,
+        "category_label": config.FAX_CATEGORIES[category],
+    })
+    return jsonify({"ok": True, "category": category})
+
+
+@app.route("/api/fax/<int:fax_id>/thumbnail")
+def api_serve_thumbnail(fax_id):
+    fax = db.get_fax(fax_id)
+    if not fax or not fax["thumbnail_path"]:
+        abort(404)
+    return send_file(fax["thumbnail_path"], mimetype="image/png")
+
+
+@app.route("/api/unread")
+def api_unread_count():
+    return jsonify({"count": db.get_unread_count()})
+
+
+@app.route("/statistik")
+def statistics():
+    overview = db.get_stats_overview()
+    per_week = db.get_stats_faxes_per_week()
+    top_senders = db.get_stats_top_senders()
+    cat_stats = db.get_stats_categories()
+    return render_template(
+        "statistics.html",
+        overview=overview,
+        per_week=per_week,
+        top_senders=top_senders,
+        cat_stats=cat_stats,
+        categories=config.FAX_CATEGORIES,
+    )
+
+
 @app.route("/api/adressbuch", methods=["POST"])
 def api_upsert_address():
     data = request.get_json()
     phone = data.get("phone_number", "").strip()
     name = data.get("name", "").strip()
+    default_category = data.get("default_category", "sonstiges")
     notes = data.get("notes", "").strip()
     if not phone or not name:
         return jsonify({"error": "Nummer und Name sind Pflichtfelder"}), 400
-    db.upsert_address(phone, name, notes)
+    db.upsert_address(phone, name, default_category, notes)
     return jsonify({"ok": True})
 
 

@@ -1,11 +1,28 @@
 /* FaxNode – Frontend JS */
 
+// --- Unread Counter ---
+var _unreadCount = (typeof UNREAD_COUNT !== 'undefined') ? UNREAD_COUNT : 0;
+function updateTabTitle() {
+    var base = 'FaxNode';
+    document.title = _unreadCount > 0 ? '(' + _unreadCount + ') ' + base : base;
+}
+updateTabTitle();
+// Poll unread count every 30s for tabs that aren't on /faxe
+setInterval(function() {
+    fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
+        _unreadCount = d.count;
+        updateTabTitle();
+    });
+}, 30000);
+
 // --- SSE ---
 var es = new EventSource('/events');
 
 es.addEventListener('new_fax', function(e) {
     var d = JSON.parse(e.data);
     var sender = d.sender_name || d.phone_number;
+    _unreadCount++;
+    updateTabTitle();
     showToast('Neues Fax', sender + ' — ' + d.received_at, '/faxe/' + d.id);
     playNotificationSound();
     showBrowserNotification('Neues Fax', sender + ' — ' + d.received_at);
@@ -26,6 +43,21 @@ es.addEventListener('status_changed', function(e) {
         sel.value = d.status;
         sel.className = 'status-select badge-' + d.status;
     }
+    // Update unread count
+    fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
+        _unreadCount = d.count;
+        updateTabTitle();
+    });
+});
+
+es.addEventListener('category_changed', function(e) {
+    var d = JSON.parse(e.data);
+    var sel = document.querySelector('#category-select[data-fax-id="' + d.fax_id + '"]');
+    if (sel && sel !== document.activeElement) {
+        sel.value = d.category;
+    }
+    // Update badge in list
+    if (location.pathname === '/faxe') location.reload();
 });
 
 es.addEventListener('note_added', function(e) {
@@ -60,6 +92,15 @@ document.addEventListener('change', function(e) {
             body: JSON.stringify({status: status})
         });
         e.target.className = 'status-select badge-' + status;
+    }
+    if (e.target.id === 'category-select') {
+        var faxId = e.target.dataset.faxId;
+        var category = e.target.value;
+        fetch('/api/fax/' + faxId + '/kategorie', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({category: category})
+        });
     }
 });
 
@@ -98,6 +139,10 @@ function printFax(faxId) {
     });
 }
 
+function quickPrint(faxId) {
+    printFax(faxId);
+}
+
 // --- Address Book ---
 function toggleAddressForm() {
     var c = document.getElementById('address-form-container');
@@ -110,6 +155,7 @@ function saveAddress(e) {
     var data = {
         phone_number: form.querySelector('[name=phone_number]').value.trim(),
         name: form.querySelector('[name=name]').value.trim(),
+        default_category: form.querySelector('[name=default_category]').value,
         notes: form.querySelector('[name=notes]').value.trim()
     };
     fetch('/api/adressbuch', {
@@ -159,7 +205,7 @@ if ('Notification' in window && Notification.permission === 'default') {
 
 function showBrowserNotification(title, body) {
     if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {body: body, icon: '/static/sounds/notification.mp3'});
+        new Notification(title, {body: body});
     }
 }
 
