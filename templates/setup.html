@@ -17,7 +17,6 @@
             --text: #e6edf3;
             --text-muted: #7d8590;
             --danger: #f85149;
-            --info: #58a6ff;
             --font-sans: 'Outfit', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
             --radius: 8px;
@@ -32,340 +31,418 @@
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-        .setup-container {
-            width: 100%;
-            max-width: 560px;
             padding: 2rem;
         }
-        .setup-header {
-            text-align: center;
-            margin-bottom: 2.5rem;
-        }
-        .setup-header .logo {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-        }
-        .setup-header h1 {
-            font-size: 1.8rem;
-            font-weight: 600;
-        }
-        .setup-header p {
-            color: var(--text-muted);
-            margin-top: 0.5rem;
-        }
-        .setup-card {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-        }
-        .setup-card h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-        .setup-card .step-desc {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            margin-bottom: 1.25rem;
-        }
+        .setup { width: 100%; max-width: 580px; }
+        .header { text-align: center; margin-bottom: 2rem; }
+        .header .logo { font-size: 3rem; }
+        .header h1 { font-size: 1.8rem; font-weight: 600; }
+        .header p { color: var(--text-muted); margin-top: 0.25rem; }
+        .dots { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 2rem; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); transition: 0.3s; }
+        .dot.active { background: var(--accent); }
+        .dot.done { background: var(--accent); opacity: 0.4; }
+        .card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.75rem; margin-bottom: 1.25rem; }
+        .card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.2rem; }
+        .card .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem; }
         .step { display: none; }
         .step.active { display: block; }
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        .form-group label {
-            display: block;
-            font-size: 0.85rem;
-            font-weight: 500;
-            margin-bottom: 0.4rem;
-            color: var(--text-muted);
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 0.65rem 0.85rem;
-            background: var(--bg-dark);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            color: var(--text);
-            font-family: var(--font-mono);
-            font-size: 0.9rem;
-        }
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1.2rem;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            background: var(--bg-elevated);
-            color: var(--text);
-            font-family: var(--font-sans);
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
+        .fg { margin-bottom: 1rem; }
+        .fg label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.35rem; color: var(--text-muted); }
+        input, select { width: 100%; padding: 0.6rem 0.8rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 0.9rem; }
+        input:focus, select:focus { outline: none; border-color: var(--accent); }
+        .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); color: var(--text); font-family: var(--font-sans); font-size: 0.9rem; cursor: pointer; transition: 0.2s; }
         .btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
-        .btn-primary {
-            background: var(--accent);
-            color: var(--bg-dark);
-            border-color: var(--accent);
-            font-weight: 600;
-        }
-        .btn-primary:hover { opacity: 0.9; background: var(--accent); }
-        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-        .btn-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1.5rem;
-        }
-        .test-result {
-            margin-top: 0.75rem;
-            padding: 0.6rem 0.85rem;
-            border-radius: var(--radius);
-            font-size: 0.85rem;
-            font-family: var(--font-mono);
-            display: none;
-        }
-        .test-result.success {
-            display: block;
-            background: rgba(57, 211, 83, 0.1);
-            border: 1px solid rgba(57, 211, 83, 0.3);
-            color: var(--accent);
-        }
-        .test-result.error {
-            display: block;
-            background: rgba(248, 81, 73, 0.1);
-            border: 1px solid rgba(248, 81, 73, 0.3);
-            color: var(--danger);
-        }
-        .printer-list {
-            margin-top: 0.75rem;
-        }
-        .printer-item {
-            padding: 0.5rem 0.75rem;
-            background: var(--bg-dark);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            margin-bottom: 0.5rem;
-            font-family: var(--font-mono);
-            font-size: 0.85rem;
-        }
-        .steps-indicator {
-            display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-bottom: 2rem;
-        }
-        .step-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--border);
-            transition: all 0.3s ease;
-        }
-        .step-dot.active { background: var(--accent); }
-        .step-dot.done { background: var(--accent); opacity: 0.5; }
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .success-icon { font-size: 3rem; text-align: center; margin-bottom: 1rem; }
+        .btn-p { background: var(--accent); color: var(--bg-dark); border-color: var(--accent); font-weight: 600; }
+        .btn-p:hover { opacity: 0.9; background: var(--accent); }
+        .btn-p:disabled { opacity: 0.35; cursor: not-allowed; }
+        .btn-row { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; }
+        .msg { margin-top: 0.75rem; padding: 0.55rem 0.8rem; border-radius: var(--radius); font-size: 0.85rem; font-family: var(--font-mono); display: none; }
+        .msg.ok { display: block; background: rgba(57,211,83,0.1); border: 1px solid rgba(57,211,83,0.3); color: var(--accent); }
+        .msg.err { display: block; background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); color: var(--danger); }
+        .msg.info { display: block; background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.3); color: #58a6ff; }
+        .host-list { margin-top: 0.75rem; }
+        .host-item { padding: 0.6rem 0.8rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 0.5rem; cursor: pointer; font-family: var(--font-mono); font-size: 0.9rem; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .host-item:hover { border-color: var(--accent); background: var(--bg-hover); }
+        .host-item.selected { border-color: var(--accent); background: var(--accent-dim); }
+        .share-list { margin-top: 0.75rem; }
+        .share-item { padding: 0.5rem 0.8rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 0.4rem; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
+        .share-item:hover { border-color: var(--accent); }
+        .share-item.selected { border-color: var(--accent); background: var(--accent-dim); }
+        .dir-browser { margin-top: 0.75rem; max-height: 200px; overflow-y: auto; }
+        .dir-item { padding: 0.4rem 0.8rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 0.3rem; cursor: pointer; font-family: var(--font-mono); font-size: 0.85rem; transition: 0.2s; }
+        .dir-item:hover { border-color: var(--accent); }
+        .crumb { display: flex; gap: 0.25rem; align-items: center; margin-bottom: 0.5rem; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap; }
+        .crumb span { cursor: pointer; color: var(--accent); }
+        .crumb span:hover { text-decoration: underline; }
+        .printer-item { padding: 0.5rem 0.8rem; background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 0.4rem; font-family: var(--font-mono); font-size: 0.85rem; }
+        .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: sp 0.6s linear infinite; }
+        @keyframes sp { to { transform: rotate(360deg); } }
+        .summary-row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .summary-row:last-child { border-bottom: none; }
+        .summary-val { font-family: var(--font-mono); color: var(--accent); }
     </style>
 </head>
 <body>
-    <div class="setup-container">
-        <div class="setup-header">
-            <div class="logo">&#9906;</div>
-            <h1>FaxNode</h1>
-            <p>Ersteinrichtung</p>
-        </div>
+<div class="setup">
+    <div class="header">
+        <div class="logo">&#9906;</div>
+        <h1>FaxNode</h1>
+        <p>Einrichtung</p>
+    </div>
+    <div class="dots" id="dots"></div>
 
-        <div class="steps-indicator">
-            <div class="step-dot active" data-step="0"></div>
-            <div class="step-dot" data-step="1"></div>
-            <div class="step-dot" data-step="2"></div>
-        </div>
-
-        <!-- Step 1: Willkommen -->
-        <div class="step active" data-step="0">
-            <div class="setup-card">
-                <h2>Willkommen</h2>
-                <p class="step-desc">
-                    FaxNode verwaltet eingehende Faxe von deiner FritzBox.
-                    PDFs werden automatisch indiziert, per OCR durchsuchbar gemacht und koennen direkt gedruckt werden.
-                </p>
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem;">
-                    Voraussetzungen:<br>
-                    &bull; FritzBox-NAS ist gemountet (z.B. /mnt/nas/faxe)<br>
-                    &bull; Tesseract OCR ist installiert<br>
-                    &bull; Optional: CUPS fuer Druckeranbindung
-                </p>
-                <div class="btn-row">
-                    <span></span>
-                    <button class="btn btn-primary" onclick="goStep(1)">Einrichtung starten</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 2: Fax-Verzeichnis -->
-        <div class="step" data-step="1">
-            <div class="setup-card">
-                <h2>Fax-Verzeichnis</h2>
-                <p class="step-desc">Wo speichert die FritzBox die eingehenden Faxe?</p>
-                <div class="form-group">
-                    <label>Pfad zum Fax-Ordner</label>
-                    <input type="text" id="fax-dir" value="/mnt/nas/faxe" placeholder="/mnt/nas/faxe">
-                </div>
-                <button class="btn" onclick="testDir()" id="test-dir-btn">Verzeichnis pruefen</button>
-                <div class="test-result" id="dir-result"></div>
-                <div class="btn-row">
-                    <button class="btn" onclick="goStep(0)">Zurueck</button>
-                    <button class="btn btn-primary" onclick="goStep(2)" id="dir-next-btn" disabled>Weiter</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 3: Drucker + Abschluss -->
-        <div class="step" data-step="2">
-            <div class="setup-card">
-                <h2>Drucker</h2>
-                <p class="step-desc">Erkannte CUPS-Drucker im Netzwerk. Drucker koennen spaeter in den Einstellungen konfiguriert werden.</p>
-                <button class="btn" onclick="testPrinters()" id="test-printer-btn">Drucker suchen</button>
-                <div class="printer-list" id="printer-list"></div>
-                <div class="test-result" id="printer-result"></div>
-            </div>
-            <div class="setup-card">
-                <h2>Einrichtung abschliessen</h2>
-                <p class="step-desc">
-                    FaxNode wird mit den folgenden Einstellungen konfiguriert.
-                    Alles Weitere kann spaeter in den Einstellungen angepasst werden.
-                </p>
-                <div style="background: var(--bg-dark); padding: 0.75rem; border-radius: var(--radius); font-family: var(--font-mono); font-size: 0.85rem; margin-bottom: 1rem;">
-                    <div>FAX_WATCH_DIR = <span id="summary-dir" style="color: var(--accent);"></span></div>
-                </div>
-                <div class="btn-row">
-                    <button class="btn" onclick="goStep(1)">Zurueck</button>
-                    <button class="btn btn-primary" onclick="saveSetup()" id="save-btn">Setup abschliessen</button>
-                </div>
+    <!-- Step 0: Willkommen -->
+    <div class="step active" id="s0">
+        <div class="card">
+            <h2>Willkommen</h2>
+            <p class="desc">FaxNode verwaltet eingehende Faxe von deiner FritzBox. Dieser Assistent richtet alles ein.</p>
+            <p style="color:var(--text-muted);font-size:0.85rem;line-height:1.8;">
+                Was jetzt passiert:<br>
+                1. NAS/FritzBox im Netzwerk finden<br>
+                2. Zugangsdaten eingeben<br>
+                3. Fax-Ordner auswaehlen<br>
+                4. Verbindung einrichten<br>
+                5. Drucker erkennen (optional)
+            </p>
+            <div class="btn-row">
+                <span></span>
+                <button class="btn btn-p" onclick="go(1)">Los geht's</button>
             </div>
         </div>
     </div>
 
-    <script>
-    var currentStep = 0;
-    var dirValid = false;
+    <!-- Step 1: NAS finden -->
+    <div class="step" id="s1">
+        <div class="card">
+            <h2>NAS finden</h2>
+            <p class="desc">Wir suchen nach Geraeten mit Dateifreigabe in deinem Netzwerk.</p>
+            <button class="btn" onclick="scanNetwork()" id="scan-btn">Netzwerk durchsuchen</button>
+            <div class="host-list" id="host-list"></div>
+            <div class="msg" id="scan-msg"></div>
+            <div class="fg" style="margin-top:1rem;">
+                <label>Oder IP-Adresse manuell eingeben</label>
+                <input type="text" id="nas-ip" placeholder="z.B. 192.168.178.1">
+            </div>
+            <div class="btn-row">
+                <button class="btn" onclick="go(0)">Zurueck</button>
+                <button class="btn btn-p" onclick="go(2)" id="ip-next">Weiter</button>
+            </div>
+        </div>
+    </div>
 
-    function goStep(n) {
-        document.querySelectorAll('.step').forEach(function(el) { el.classList.remove('active'); });
-        document.querySelector('.step[data-step="' + n + '"]').classList.add('active');
-        document.querySelectorAll('.step-dot').forEach(function(dot, i) {
-            dot.classList.remove('active', 'done');
-            if (i === n) dot.classList.add('active');
-            else if (i < n) dot.classList.add('done');
+    <!-- Step 2: Zugangsdaten + Freigaben -->
+    <div class="step" id="s2">
+        <div class="card">
+            <h2>Zugangsdaten</h2>
+            <p class="desc">Benutzername und Passwort fuer die NAS-Freigabe (FritzBox-Benutzer).</p>
+            <div class="fg">
+                <label>Benutzername</label>
+                <input type="text" id="nas-user" placeholder="z.B. jschaefer">
+            </div>
+            <div class="fg">
+                <label>Passwort</label>
+                <input type="password" id="nas-pass">
+            </div>
+            <button class="btn" onclick="listShares()" id="shares-btn">Freigaben laden</button>
+            <div class="share-list" id="share-list"></div>
+            <div class="msg" id="shares-msg"></div>
+            <div class="btn-row">
+                <button class="btn" onclick="go(1)">Zurueck</button>
+                <button class="btn btn-p" onclick="go(3)" id="share-next" disabled>Weiter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Ordner waehlen -->
+    <div class="step" id="s3">
+        <div class="card">
+            <h2>Fax-Ordner</h2>
+            <p class="desc">Waehle den Ordner, in dem die FritzBox die Faxe ablegt.</p>
+            <div class="crumb" id="crumb"></div>
+            <div class="dir-browser" id="dir-browser"></div>
+            <div class="msg" id="browse-msg"></div>
+            <div class="fg" style="margin-top:1rem;">
+                <label>Oder Pfad manuell eingeben (relativ zur Freigabe)</label>
+                <input type="text" id="nas-path" placeholder="z.B. FRITZ/faxbox oder Volume/FAX">
+            </div>
+            <div class="btn-row">
+                <button class="btn" onclick="go(2)">Zurueck</button>
+                <button class="btn btn-p" onclick="go(4)">Weiter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 4: Verbindung testen -->
+    <div class="step" id="s4">
+        <div class="card">
+            <h2>Verbindung einrichten</h2>
+            <p class="desc">NAS-Verbindung wird dauerhaft eingerichtet und getestet.</p>
+            <div class="summary-row"><span>NAS-IP</span><span class="summary-val" id="sum-ip"></span></div>
+            <div class="summary-row"><span>Freigabe</span><span class="summary-val" id="sum-share"></span></div>
+            <div class="summary-row"><span>Ordner</span><span class="summary-val" id="sum-path"></span></div>
+            <div class="summary-row"><span>Benutzer</span><span class="summary-val" id="sum-user"></span></div>
+            <div style="margin-top:1.25rem;">
+                <button class="btn btn-p" onclick="mountNas()" id="mount-btn">Verbindung einrichten</button>
+            </div>
+            <div class="msg" id="mount-msg"></div>
+            <div class="btn-row">
+                <button class="btn" onclick="go(3)">Zurueck</button>
+                <button class="btn btn-p" onclick="go(5)" id="mount-next" disabled>Weiter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 5: Drucker (optional) + Fertig -->
+    <div class="step" id="s5">
+        <div class="card">
+            <h2>Drucker (optional)</h2>
+            <p class="desc">Erkannte CUPS-Drucker. Kann spaeter in den Einstellungen konfiguriert werden.</p>
+            <button class="btn" onclick="testPrinters()" id="printer-btn">Drucker suchen</button>
+            <div id="printer-list" style="margin-top:0.75rem;"></div>
+            <div class="msg" id="printer-msg"></div>
+        </div>
+        <div class="card">
+            <h2>Einrichtung abschliessen</h2>
+            <p class="desc">FaxNode wird konfiguriert und beginnt sofort mit der Indizierung aller vorhandenen Faxe.</p>
+            <div class="btn-row">
+                <button class="btn" onclick="go(4)">Zurueck</button>
+                <button class="btn btn-p" onclick="saveSetup()" id="save-btn">FaxNode starten</button>
+            </div>
+            <div class="msg" id="save-msg"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+var STEPS = 6;
+var _ip = '', _user = '', _pass = '', _share = '', _path = '', _mountPoint = '';
+
+// Dots rendern
+(function() {
+    var d = document.getElementById('dots');
+    for (var i = 0; i < STEPS; i++) d.innerHTML += '<div class="dot' + (i === 0 ? ' active' : '') + '" data-s="' + i + '"></div>';
+})();
+
+function go(n) {
+    for (var i = 0; i < STEPS; i++) {
+        document.getElementById('s' + i).classList.toggle('active', i === n);
+        var dot = document.querySelector('.dot[data-s="' + i + '"]');
+        dot.classList.remove('active', 'done');
+        if (i === n) dot.classList.add('active');
+        else if (i < n) dot.classList.add('done');
+    }
+    // Daten sammeln bei bestimmten Schritten
+    if (n === 2) {
+        _ip = document.getElementById('nas-ip').value.trim();
+    }
+    if (n === 3) {
+        _user = document.getElementById('nas-user').value.trim();
+        _pass = document.getElementById('nas-pass').value;
+        browseTo('');
+    }
+    if (n === 4) {
+        _path = document.getElementById('nas-path').value.trim();
+        document.getElementById('sum-ip').textContent = _ip;
+        document.getElementById('sum-share').textContent = _share;
+        document.getElementById('sum-path').textContent = _path || '(Root)';
+        document.getElementById('sum-user').textContent = _user;
+    }
+}
+
+function setMsg(id, cls, text) {
+    var el = document.getElementById(id);
+    el.className = 'msg ' + cls;
+    el.textContent = text;
+}
+
+function setBtnLoading(id, loading, text) {
+    var btn = document.getElementById(id);
+    btn.disabled = loading;
+    btn.innerHTML = loading ? '<span class="spin"></span> ' + (text || '') : (text || btn.textContent);
+}
+
+// Step 1: Netzwerk scannen
+function scanNetwork() {
+    setBtnLoading('scan-btn', true, 'Suche...');
+    document.getElementById('host-list').innerHTML = '';
+    fetch('/api/setup/scan-network', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            setBtnLoading('scan-btn', false, 'Netzwerk durchsuchen');
+            if (d.hosts.length === 0) {
+                setMsg('scan-msg', 'err', 'Kein Geraet mit Dateifreigabe gefunden. IP manuell eingeben.');
+                return;
+            }
+            document.getElementById('scan-msg').className = 'msg';
+            var list = document.getElementById('host-list');
+            d.hosts.forEach(function(h) {
+                var div = document.createElement('div');
+                div.className = 'host-item';
+                div.innerHTML = h.ip + (h.is_gateway ? '<span style="color:var(--text-muted);font-size:0.8rem;">Gateway / FritzBox</span>' : '');
+                div.onclick = function() {
+                    document.querySelectorAll('.host-item').forEach(function(el) { el.classList.remove('selected'); });
+                    div.classList.add('selected');
+                    document.getElementById('nas-ip').value = h.ip;
+                };
+                list.appendChild(div);
+            });
+            // Ersten automatisch auswaehlen
+            if (d.hosts.length > 0) {
+                document.getElementById('nas-ip').value = d.hosts[0].ip;
+                list.firstChild.classList.add('selected');
+            }
         });
-        currentStep = n;
-        if (n === 2) {
-            document.getElementById('summary-dir').textContent = document.getElementById('fax-dir').value;
+}
+
+// Step 2: Freigaben listen
+function listShares() {
+    _ip = document.getElementById('nas-ip').value.trim();
+    _user = document.getElementById('nas-user').value.trim();
+    _pass = document.getElementById('nas-pass').value;
+    setBtnLoading('shares-btn', true, 'Laden...');
+    document.getElementById('share-list').innerHTML = '';
+    fetch('/api/setup/list-shares', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip: _ip, username: _user, password: _pass})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        setBtnLoading('shares-btn', false, 'Freigaben laden');
+        if (!d.ok) { setMsg('shares-msg', 'err', d.error); return; }
+        document.getElementById('shares-msg').className = 'msg';
+        var list = document.getElementById('share-list');
+        d.shares.forEach(function(s) {
+            var div = document.createElement('div');
+            div.className = 'share-item';
+            div.textContent = s.name + (s.comment ? ' — ' + s.comment : '');
+            div.onclick = function() {
+                document.querySelectorAll('.share-item').forEach(function(el) { el.classList.remove('selected'); });
+                div.classList.add('selected');
+                _share = s.name;
+                document.getElementById('share-next').disabled = false;
+            };
+            list.appendChild(div);
+        });
+    });
+}
+
+// Step 3: Ordner browsen
+var _browsePath = [];
+function browseTo(subdir) {
+    if (subdir === '..') {
+        _browsePath.pop();
+    } else if (subdir) {
+        _browsePath.push(subdir);
+    } else {
+        _browsePath = [];
+    }
+    var pathStr = _browsePath.join('/');
+    document.getElementById('nas-path').value = pathStr;
+    updateCrumb();
+    var browser = document.getElementById('dir-browser');
+    browser.innerHTML = '<div style="color:var(--text-muted);padding:0.5rem;">Laden...</div>';
+    fetch('/api/setup/browse-share', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip: _ip, share: _share, path: pathStr, username: _user, password: _pass})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        browser.innerHTML = '';
+        if (!d.ok) {
+            setMsg('browse-msg', 'info', 'Ordner konnte nicht gelesen werden. Pfad manuell eingeben oder diesen Ordner waehlen.');
+            return;
         }
-    }
-
-    function testDir() {
-        var path = document.getElementById('fax-dir').value.trim();
-        var btn = document.getElementById('test-dir-btn');
-        var result = document.getElementById('dir-result');
-        btn.innerHTML = '<span class="spinner"></span> Pruefen...';
-        btn.disabled = true;
-
-        fetch('/api/setup/test-dir', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({path: path})
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            btn.innerHTML = 'Verzeichnis pruefen';
-            btn.disabled = false;
-            if (d.ok) {
-                result.className = 'test-result success';
-                result.textContent = 'Verzeichnis gefunden — ' + d.pdf_count + ' PDF-Dateien erkannt';
-                dirValid = true;
-                document.getElementById('dir-next-btn').disabled = false;
-            } else {
-                result.className = 'test-result error';
-                result.textContent = d.error;
-                dirValid = false;
-                document.getElementById('dir-next-btn').disabled = true;
-            }
+        document.getElementById('browse-msg').className = 'msg';
+        if (d.pdf_count > 0) {
+            setMsg('browse-msg', 'ok', d.pdf_count + ' PDF-Dateien in diesem Ordner gefunden!');
+        }
+        if (_browsePath.length > 0) {
+            var up = document.createElement('div');
+            up.className = 'dir-item';
+            up.textContent = '.. (zurueck)';
+            up.onclick = function() { browseTo('..'); };
+            browser.appendChild(up);
+        }
+        d.dirs.forEach(function(dir) {
+            var div = document.createElement('div');
+            div.className = 'dir-item';
+            div.textContent = '/' + dir.name;
+            div.onclick = function() { browseTo(dir.name); };
+            browser.appendChild(div);
         });
-    }
+        if (d.dirs.length === 0 && d.pdf_count === 0) {
+            browser.innerHTML = '<div style="color:var(--text-muted);padding:0.5rem;">Ordner ist leer oder nicht lesbar</div>';
+        }
+    });
+}
 
-    function testPrinters() {
-        var btn = document.getElementById('test-printer-btn');
-        var list = document.getElementById('printer-list');
-        var result = document.getElementById('printer-result');
-        btn.innerHTML = '<span class="spinner"></span> Suchen...';
-        btn.disabled = true;
-        list.innerHTML = '';
-        result.style.display = 'none';
+function updateCrumb() {
+    var c = document.getElementById('crumb');
+    c.innerHTML = '<span onclick="browseTo(\'\')">' + _share + '</span>';
+    _browsePath.forEach(function(p, i) {
+        c.innerHTML += ' / <span onclick="_browsePath.length=' + (i+1) + ';browseTo(\'\')">' + p + '</span>';
+    });
+}
 
-        fetch('/api/setup/test-printers').then(function(r) { return r.json(); }).then(function(d) {
-            btn.innerHTML = 'Drucker suchen';
-            btn.disabled = false;
-            if (d.ok && d.printers.length > 0) {
-                d.printers.forEach(function(name) {
-                    var div = document.createElement('div');
-                    div.className = 'printer-item';
-                    div.textContent = name;
-                    list.appendChild(div);
-                });
-            } else if (d.ok) {
-                result.className = 'test-result error';
-                result.textContent = 'Keine Drucker gefunden. CUPS-Drucker koennen spaeter eingerichtet werden.';
-            } else {
-                result.className = 'test-result error';
-                result.textContent = 'CUPS nicht verfuegbar: ' + (d.error || 'unbekannter Fehler');
-            }
-        });
-    }
+// Step 4: Mount einrichten
+function mountNas() {
+    setBtnLoading('mount-btn', true, 'Wird eingerichtet...');
+    fetch('/api/setup/mount-nas', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip: _ip, share: _share, path: _path, username: _user, password: _pass})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        setBtnLoading('mount-btn', false, 'Verbindung einrichten');
+        if (d.ok) {
+            setMsg('mount-msg', 'ok', 'Verbindung steht! ' + d.pdf_count + ' PDFs gefunden und lesbar.');
+            _mountPoint = d.mount_point;
+            document.getElementById('mount-next').disabled = false;
+        } else {
+            setMsg('mount-msg', 'err', d.error);
+        }
+    });
+}
 
-    function saveSetup() {
-        var btn = document.getElementById('save-btn');
-        var faxDir = document.getElementById('fax-dir').value.trim();
-        btn.innerHTML = '<span class="spinner"></span> Wird eingerichtet...';
-        btn.disabled = true;
+// Step 5: Drucker
+function testPrinters() {
+    setBtnLoading('printer-btn', true, 'Suche...');
+    document.getElementById('printer-list').innerHTML = '';
+    fetch('/api/setup/test-printers').then(function(r) { return r.json(); }).then(function(d) {
+        setBtnLoading('printer-btn', false, 'Drucker suchen');
+        if (d.ok && d.printers.length > 0) {
+            var list = document.getElementById('printer-list');
+            d.printers.forEach(function(name) {
+                var div = document.createElement('div');
+                div.className = 'printer-item';
+                div.textContent = name;
+                list.appendChild(div);
+            });
+        } else {
+            setMsg('printer-msg', 'info', 'Keine CUPS-Drucker gefunden. Kann spaeter eingerichtet werden.');
+        }
+    });
+}
 
-        fetch('/api/setup/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({fax_dir: faxDir})
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            if (d.ok) {
-                document.querySelector('.setup-container').innerHTML =
-                    '<div style="text-align:center;">' +
-                    '<div class="success-icon" style="color:var(--accent);">&#10003;</div>' +
-                    '<h1 style="margin-bottom:0.5rem;">Einrichtung abgeschlossen</h1>' +
-                    '<p style="color:var(--text-muted);margin-bottom:2rem;">FaxNode indiziert jetzt die vorhandenen Faxe. Die Vorschaubilder werden im Hintergrund erstellt.</p>' +
-                    '<a href="/" class="btn btn-primary" style="text-decoration:none;">FaxNode oeffnen</a>' +
-                    '</div>';
-            } else {
-                btn.innerHTML = 'Setup abschliessen';
-                btn.disabled = false;
-                alert('Fehler: ' + d.error);
-            }
-        });
-    }
-    </script>
+// Speichern
+function saveSetup() {
+    setBtnLoading('save-btn', true, 'Wird gestartet...');
+    fetch('/api/setup/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fax_dir: _mountPoint || '/mnt/nas/faxe'})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            document.querySelector('.setup').innerHTML =
+                '<div style="text-align:center;">' +
+                '<div style="font-size:3rem;color:var(--accent);margin-bottom:1rem;">&#10003;</div>' +
+                '<h1 style="margin-bottom:0.5rem;">FaxNode ist bereit</h1>' +
+                '<p style="color:var(--text-muted);margin-bottom:2rem;">Die vorhandenen Faxe werden jetzt im Hintergrund indiziert und durchsuchbar gemacht.</p>' +
+                '<a href="/" class="btn btn-p" style="text-decoration:none;">FaxNode oeffnen</a></div>';
+        } else {
+            setBtnLoading('save-btn', false, 'FaxNode starten');
+            setMsg('save-msg', 'err', d.error);
+        }
+    });
+}
+</script>
 </body>
 </html>

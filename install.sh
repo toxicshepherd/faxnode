@@ -1,6 +1,6 @@
 #!/bin/bash
 # FaxNode – Installer
-# Bringt alles zum Laufen, Konfiguration erfolgt im Browser.
+# Installiert alles, Konfiguration erfolgt im Browser-Wizard.
 set -e
 
 REPO="https://github.com/toxicshepherd/faxnode.git"
@@ -14,7 +14,7 @@ echo "  ╚═══════════════════════
 echo ""
 
 # 1. System-Pakete
-echo "[1/5] System-Pakete installieren..."
+echo "[1/6] System-Pakete installieren..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq \
     python3 python3-venv python3-pip \
@@ -22,36 +22,49 @@ sudo apt-get install -y -qq \
     poppler-utils \
     libcups2-dev \
     cifs-utils \
+    smbclient \
     git > /dev/null
 echo "      Fertig."
 
 # 2. Repo klonen
-echo "[2/5] FaxNode herunterladen..."
-if [ -d "$INSTALL_DIR" ]; then
-    echo "      $INSTALL_DIR existiert bereits, aktualisiere..."
+echo "[2/6] FaxNode herunterladen..."
+if [ -d "$INSTALL_DIR/.git" ]; then
+    echo "      Aktualisiere..."
     sudo git -C "$INSTALL_DIR" pull -q
 else
+    sudo rm -rf "$INSTALL_DIR"
     sudo git clone -q "$REPO" "$INSTALL_DIR"
 fi
 sudo chown -R "$USER":"$USER" "$INSTALL_DIR"
 echo "      Fertig."
 
 # 3. Python-Umgebung
-echo "[3/5] Python-Umgebung einrichten..."
+echo "[3/6] Python-Umgebung einrichten..."
 python3 -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip -q
 "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -q
 echo "      Fertig."
 
-# 4. Verzeichnisse anlegen
-echo "[4/5] Verzeichnisse vorbereiten..."
+# 4. Verzeichnisse
+echo "[4/6] Verzeichnisse vorbereiten..."
 mkdir -p "$INSTALL_DIR/data/thumbnails"
 mkdir -p "$INSTALL_DIR/static/sounds"
 sudo mkdir -p /mnt/nas/faxe
 echo "      Fertig."
 
-# 5. systemd Service
-echo "[5/5] systemd Service einrichten..."
+# 5. Sudoers fuer Setup-Helper (NAS-Mount ohne Passwort)
+echo "[5/6] Berechtigungen einrichten..."
+sudo chmod +x "$INSTALL_DIR/setup-helper.sh"
+SUDOERS_LINE="$USER ALL=(ALL) NOPASSWD: $INSTALL_DIR/setup-helper.sh"
+SUDOERS_FILE="/etc/sudoers.d/faxnode"
+if [ ! -f "$SUDOERS_FILE" ] || ! grep -qF "$SUDOERS_LINE" "$SUDOERS_FILE" 2>/dev/null; then
+    echo "$SUDOERS_LINE" | sudo tee "$SUDOERS_FILE" > /dev/null
+    sudo chmod 440 "$SUDOERS_FILE"
+fi
+echo "      Fertig."
+
+# 6. systemd Service
+echo "[6/6] systemd Service einrichten..."
 sudo tee /etc/systemd/system/faxnode.service > /dev/null <<EOF
 [Unit]
 Description=FaxNode – Digitale Faxverwaltung
@@ -72,7 +85,7 @@ EOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable faxnode.service -q
-sudo systemctl start faxnode.service
+sudo systemctl restart faxnode.service
 echo "      Fertig."
 
 # Fertig
@@ -85,6 +98,6 @@ echo "  Oeffne im Browser:"
 echo "  http://$IP:5000"
 echo ""
 echo "  Der Setup-Wizard fuehrt dich durch"
-echo "  die restliche Einrichtung."
+echo "  die komplette Einrichtung."
 echo "  ══════════════════════════════════════"
 echo ""

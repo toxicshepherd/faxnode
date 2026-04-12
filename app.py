@@ -2,6 +2,8 @@
 import json
 import os
 import queue
+import re
+import subprocess
 import threading
 from pathlib import Path
 from flask import (
@@ -10,6 +12,8 @@ from flask import (
 )
 import db
 import config
+
+SETUP_HELPER = str(Path(config.BASE_DIR) / "setup-helper.sh")
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -78,19 +82,154 @@ def setup():
     return render_template("setup.html")
 
 
-@app.route("/api/setup/test-dir", methods=["POST"])
-def api_setup_test_dir():
-    data = request.get_json()
-    path = data.get("path", "").strip()
-    if not path:
-        return jsonify({"ok": False, "error": "Pfad darf nicht leer sein"})
-    if not os.path.isdir(path):
-        return jsonify({"ok": False, "error": "Verzeichnis existiert nicht"})
+@app.route("/api/setup/scan-network", methods=["POST"])
+def api_setup_scan_network():
+    """Gateway und gaengige NAS-IPs nach SMB scannen."""
+    hosts = []
+    # Gateway ermitteln (typisch: FritzBox)
     try:
-        files = [f for f in os.listdir(path) if f.lower().endswith(".pdf")]
-        return jsonify({"ok": True, "pdf_count": len(files)})
-    except PermissionError:
-        return jsonify({"ok": False, "error": "Keine Leseberechtigung"})
+        gw = subprocess.check_output(
+            "ip route | grep default | awk '{print $3}'",
+            shell=True, text=True, timeout=5
+        ).strip()
+        if gw:
+            hosts.append(gw)
+    except Exception:
+        pass
+    # Gaengige FritzBox-IPs
+    for ip in ["192.168.178.1", "192.168.1.1", "192.168.0.1"]:
+        if ip not in hosts:
+            hosts.append(ip)
+    found = []
+    for ip in hosts:
+        try:
+            r = subprocess.run(
+                ["nc", "-zw1", ip, "445"],
+                capture_output=True, timeout=3
+            )
+            if r.returncode == 0:
+                found.append({"ip": ip, "is_gateway": ip == (gw if 'gw' in dir() else "")})
+        except Exception:
+            pass
+    return jsonify({"ok": True, "hosts": found})
+
+
+@app.route("/api/setup/list-shares", methods=["POST"])
+def api_setup_list_shares():
+    """SMB-Freigaben eines Hosts auflisten."""
+    data = request.get_json()
+    ip = data.get("ip", "").strip()
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    if not ip or not username:
+        return jsonify({"ok": False, "error": "IP und Benutzername erforderlich"})
+    try:
+        r = subprocess.run(
+            ["smbclient", "-L", f"//{ip}", "-U", f"{username}%{password}"],
+            capture_output=True, text=True, timeout=10
+        )
+        shares = []
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            m = re.match(r"^(\S+)\s+Disk\s+(.*)$", line)
+            if m and not m.group(1).endswith("$"):
+                shares.append({"name": m.group(1), "comment": m.group(2).strip()})
+        if not shares:
+            return jsonify({"ok": False, "error": "Keine Freigaben gefunden oder Zugangsdaten falsch"})
+        return jsonify({"ok": True, "shares": shares})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "Zeitueberschreitung — Host nicht erreichbar"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/setup/browse-share", methods=["POST"])
+def api_setup_browse_share():
+    """Verzeichnisse in einer SMB-Freigabe auflisten."""
+    data = request.get_json()
+    ip = data.get("ip", "").strip()
+    share = data.get("share", "").strip()
+    path = data.get("path", "").strip()
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    cmd_path = f"{path}/" if path else ""
+    try:
+        r = subprocess.run(
+            ["smbclient", f"//{ip}/{share}", "-U", f"{username}%{password}",
+             "-c", f"ls {cmd_path}*"],
+            capture_output=True, text=True, timeout=10
+        )
+        entries = []
+        pdf_count = 0
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            m = re.match(r"^(\S+)\s+([A-Z]*D[A-Z]*)\s+\d+\s+.+$", line)
+            if m and m.group(1) not in (".", ".."):
+                entries.append({"name": m.group(1), "type": "dir"})
+            elif line.lower().endswith(".pdf"):
+                pdf_count += 1
+        return jsonify({"ok": True, "dirs": entries, "pdf_count": pdf_count})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "Zeitueberschreitung"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/setup/mount-nas", methods=["POST"])
+def api_setup_mount_nas():
+    """NAS-Credentials speichern, fstab eintragen, mounten."""
+    data = request.get_json()
+    ip = data.get("ip", "").strip()
+    share = data.get("share", "").strip()
+    path = data.get("path", "").strip()
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    mount_point = "/mnt/nas/faxe"
+
+    smb_path = f"//{ip}/{share}"
+    if path:
+        smb_path += f"/{path}"
+
+    try:
+        # 1. Credentials schreiben
+        r = subprocess.run(
+            ["sudo", SETUP_HELPER, "write-creds", username, password],
+            capture_output=True, text=True, timeout=5
+        )
+        if r.returncode != 0:
+            return jsonify({"ok": False, "error": f"Credentials-Fehler: {r.stderr}"})
+
+        # 2. fstab Eintrag
+        r = subprocess.run(
+            ["sudo", SETUP_HELPER, "add-fstab", smb_path, mount_point],
+            capture_output=True, text=True, timeout=5
+        )
+        if r.returncode != 0:
+            return jsonify({"ok": False, "error": f"fstab-Fehler: {r.stderr}"})
+
+        # 3. Mounten
+        r = subprocess.run(
+            ["sudo", SETUP_HELPER, "mount", mount_point],
+            capture_output=True, text=True, timeout=15
+        )
+        if r.returncode != 0:
+            return jsonify({"ok": False, "error": f"Mount-Fehler: {r.stderr}"})
+
+        # 4. Pruefen ob Dateien lesbar sind
+        try:
+            files = os.listdir(mount_point)
+            pdfs = [f for f in files if f.lower().endswith(".pdf")]
+            # Lesbarkeitspruefung
+            if pdfs:
+                test_path = os.path.join(mount_point, pdfs[0])
+                with open(test_path, "rb") as f:
+                    f.read(10)
+            return jsonify({"ok": True, "mount_point": mount_point, "pdf_count": len(pdfs)})
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Mount erfolgreich, aber Dateien nicht lesbar: {e}"})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.route("/api/setup/test-printers")
