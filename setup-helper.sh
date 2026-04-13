@@ -8,14 +8,9 @@ shift
 
 case "$CMD" in
     write-creds)
-        # Argumente: USERNAME PASSWORD
-        USERNAME="$1"
-        PASSWORD="$2"
+        # Credentials werden per stdin gelesen (nicht als Argument, sonst im Journal sichtbar)
         mkdir -p /etc/samba
-        cat > /etc/samba/fax_creds <<EOF
-username=$USERNAME
-password=$PASSWORD
-EOF
+        cat > /etc/samba/fax_creds
         chmod 600 /etc/samba/fax_creds
         echo "OK"
         ;;

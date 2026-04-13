@@ -114,7 +114,8 @@ def requeue_failed():
         logger.info("OCR Re-Queue: %d Faxe eingereiht (OCR + fehlende Thumbnails)", len(fax_ids))
 
 
-OCR_WORKERS = int(os.environ.get("OCR_WORKERS", "2"))
+# Default: 1 Worker (sicher fuer Pi 3B mit 1GB RAM, 2 fuer Pi 4+)
+OCR_WORKERS = int(os.environ.get("OCR_WORKERS", "1"))
 
 
 def start_ocr_worker(broadcast_fn):

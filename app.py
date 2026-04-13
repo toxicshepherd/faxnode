@@ -209,10 +209,11 @@ def api_setup_mount_nas():
         smb_path += f"/{path}"
 
     try:
-        # 1. Credentials schreiben
+        # 1. Credentials schreiben (per stdin, nicht als Argument — sonst im Journal sichtbar)
+        creds_content = f"username={username}\npassword={password}\n"
         r = subprocess.run(
-            ["sudo", SETUP_HELPER, "write-creds", username, password],
-            capture_output=True, text=True, timeout=5
+            ["sudo", SETUP_HELPER, "write-creds"],
+            input=creds_content, capture_output=True, text=True, timeout=5
         )
         if r.returncode != 0:
             return jsonify({"ok": False, "error": f"Credentials-Fehler: {r.stderr}"})
