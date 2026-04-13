@@ -29,7 +29,7 @@ def _ocr_worker():
             from pdf2image import convert_from_path
             import pytesseract
 
-            images = convert_from_path(file_path, dpi=200)
+            images = convert_from_path(file_path, dpi=150)
             texts = []
             for i, image in enumerate(images):
                 text = pytesseract.image_to_string(image, lang=config.OCR_LANGUAGE)
@@ -102,14 +102,18 @@ def requeue_failed():
         logger.info("OCR Re-Queue: %d Faxe erneut eingereiht", len(fax_ids))
 
 
+OCR_WORKERS = int(os.environ.get("OCR_WORKERS", "2"))
+
+
 def start_ocr_worker(broadcast_fn):
-    """OCR Worker Thread starten."""
+    """OCR Worker Threads starten."""
     global _broadcast
     _broadcast = broadcast_fn
 
-    worker = threading.Thread(target=_ocr_worker, daemon=True, name="ocr-worker")
-    worker.start()
-    logger.info("OCR Worker gestartet")
+    for i in range(OCR_WORKERS):
+        worker = threading.Thread(target=_ocr_worker, daemon=True, name=f"ocr-worker-{i}")
+        worker.start()
+    logger.info("OCR gestartet: %d Worker", OCR_WORKERS)
 
     # Fehlgeschlagene OCR-Jobs erneut verarbeiten
     requeue_failed()
