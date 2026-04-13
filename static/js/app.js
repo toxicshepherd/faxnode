@@ -11,7 +11,7 @@ setInterval(function() {
     fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
         _unreadCount = d.count;
         updateTabTitle();
-    });
+    }).catch(function() {});
 }, 30000);
 
 // --- Date Formatting ---
@@ -130,7 +130,7 @@ function setStatus(faxId, status) {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({status: status})
-    });
+    }).catch(function() { showToast('Fehler', 'Status konnte nicht geaendert werden'); });
     // Sofort visuell aktualisieren
     document.querySelectorAll('.status-btns[data-fax-id="' + faxId + '"]').forEach(function(container) {
         container.querySelectorAll('.status-btn').forEach(function(btn) {
@@ -147,7 +147,7 @@ document.addEventListener('change', function(e) {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({category: e.target.value})
-        });
+        }).catch(function() { showToast('Fehler', 'Kategorie konnte nicht geaendert werden'); });
     }
 });
 
@@ -178,7 +178,7 @@ document.addEventListener('submit', function(e) {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({author: author, message: message})
-        });
+        }).catch(function() { showToast('Fehler', 'Notiz konnte nicht gespeichert werden'); });
         form.querySelector('[name=message]').value = '';
     }
 });
@@ -229,12 +229,15 @@ function saveAddress(e) {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
-    }).then(function() { location.reload(); });
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) location.reload();
+        else showToast('Fehler', d.error || 'Eintrag konnte nicht gespeichert werden');
+    }).catch(function() { showToast('Fehler', 'Verbindungsfehler'); });
 }
 
 function deleteAddress(id) {
     if (!confirm('Eintrag wirklich loeschen?')) return;
-    fetch('/api/adressbuch/' + id, {method: 'DELETE'}).then(function() { location.reload(); });
+    fetch('/api/adressbuch/' + id, {method: 'DELETE'}).then(function() { location.reload(); }).catch(function() { showToast('Fehler', 'Eintrag konnte nicht geloescht werden'); });
 }
 
 // --- Notifications ---

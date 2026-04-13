@@ -280,7 +280,13 @@ function scanNetwork() {
             d.hosts.forEach(function(h) {
                 var div = document.createElement('div');
                 div.className = 'host-item';
-                div.innerHTML = h.ip + (h.is_gateway ? '<span style="color:var(--text-muted);font-size:0.8rem;">Gateway / FritzBox</span>' : '');
+                div.textContent = h.ip;
+                if (h.is_gateway) {
+                    var gw = document.createElement('span');
+                    gw.style.cssText = 'color:var(--text-muted);font-size:0.8rem;';
+                    gw.textContent = 'Gateway / FritzBox';
+                    div.appendChild(gw);
+                }
                 div.onclick = function() {
                     document.querySelectorAll('.host-item').forEach(function(el) { el.classList.remove('selected'); });
                     div.classList.add('selected');
@@ -378,9 +384,17 @@ function browseTo(subdir) {
 
 function updateCrumb() {
     var c = document.getElementById('crumb');
-    c.innerHTML = '<span onclick="browseTo(\'\')">' + _share + '</span>';
+    c.innerHTML = '';
+    var root = document.createElement('span');
+    root.textContent = _share;
+    root.onclick = function() { browseTo(''); };
+    c.appendChild(root);
     _browsePath.forEach(function(p, i) {
-        c.innerHTML += ' / <span onclick="_browsePath.length=' + (i+1) + ';browseTo(\'\')">' + p + '</span>';
+        c.appendChild(document.createTextNode(' / '));
+        var span = document.createElement('span');
+        span.textContent = p;
+        span.onclick = function() { _browsePath.length = i + 1; browseTo(''); };
+        c.appendChild(span);
     });
 }
 
@@ -426,7 +440,14 @@ function discoverPrinters() {
                 div.style.justifyContent = 'space-between';
                 div.style.alignItems = 'center';
                 var info = document.createElement('div');
-                info.innerHTML = '<div style="font-weight:500;">' + p.name + '</div><div style="font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono);">' + p.uri + '</div>';
+                var nameDiv = document.createElement('div');
+                nameDiv.style.fontWeight = '500';
+                nameDiv.textContent = p.name;
+                var uriDiv = document.createElement('div');
+                uriDiv.style.cssText = 'font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono);';
+                uriDiv.textContent = p.uri;
+                info.appendChild(nameDiv);
+                info.appendChild(uriDiv);
                 var btn = document.createElement('button');
                 btn.className = 'btn';
                 btn.style.flexShrink = '0';
@@ -467,10 +488,17 @@ function addPrinter(name, uri, btn) {
 
 function updateAddedList() {
     var el = document.getElementById('added-printers');
-    if (_addedPrinters.length === 0) { el.innerHTML = ''; return; }
-    el.innerHTML = '<div style="color:var(--accent);font-size:0.85rem;margin-bottom:0.5rem;">' + _addedPrinters.length + ' Drucker eingerichtet:</div>';
+    el.innerHTML = '';
+    if (_addedPrinters.length === 0) return;
+    var header = document.createElement('div');
+    header.style.cssText = 'color:var(--accent);font-size:0.85rem;margin-bottom:0.5rem;';
+    header.textContent = _addedPrinters.length + ' Drucker eingerichtet:';
+    el.appendChild(header);
     _addedPrinters.forEach(function(n) {
-        el.innerHTML += '<div class="printer-item">' + n + '</div>';
+        var item = document.createElement('div');
+        item.className = 'printer-item';
+        item.textContent = n;
+        el.appendChild(item);
     });
 }
 

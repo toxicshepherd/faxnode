@@ -1,5 +1,6 @@
 """FaxNode – Flask App."""
 import json
+import logging
 import os
 import queue
 import re
@@ -13,6 +14,8 @@ from flask import (
 )
 import db
 import config
+
+logger = logging.getLogger(__name__)
 
 
 def safe_int(value, default=1, minimum=1, maximum=None):
@@ -129,8 +132,8 @@ def api_setup_scan_network():
                     break
         if gw:
             hosts.append(gw)
-    except Exception:
-        pass
+    except (subprocess.TimeoutExpired, OSError) as e:
+        logger.debug("Gateway-Erkennung fehlgeschlagen: %s", e)
     # Gaengige FritzBox-IPs
     for ip in ["192.168.178.1", "192.168.1.1", "192.168.0.1"]:
         if ip not in hosts:
@@ -144,7 +147,7 @@ def api_setup_scan_network():
             )
             if r.returncode == 0:
                 found.append({"ip": ip, "is_gateway": ip == gw})
-        except Exception:
+        except (subprocess.TimeoutExpired, OSError):
             pass
     return jsonify({"ok": True, "hosts": found})
 
@@ -158,10 +161,13 @@ def api_setup_list_shares():
     password = data.get("password", "")
     if not ip or not username:
         return jsonify({"ok": False, "error": "IP und Benutzername erforderlich"})
+    if not re.match(r"^[\d.]+$", ip):
+        return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
     try:
+        env = {**os.environ, "PASSWD": password}
         r = subprocess.run(
-            ["smbclient", "-L", f"//{ip}", "-U", f"{username}%{password}"],
-            capture_output=True, text=True, timeout=10
+            ["smbclient", "-L", f"//{ip}", "-U", username],
+            capture_output=True, text=True, timeout=10, env=env
         )
         shares = []
         for line in r.stdout.splitlines():
@@ -187,12 +193,18 @@ def api_setup_browse_share():
     path = data.get("path", "").strip()
     username = data.get("username", "").strip()
     password = data.get("password", "")
+    if not re.match(r"^[\d.]+$", ip):
+        return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
+    # Pfad sanitizen: nur sichere Zeichen erlauben
+    if path and not re.match(r"^[\w./ -]+$", path):
+        return jsonify({"ok": False, "error": "Ungueltiger Pfad"})
     cmd_path = f"{path}/" if path else ""
     try:
+        env = {**os.environ, "PASSWD": password}
         r = subprocess.run(
-            ["smbclient", f"//{ip}/{share}", "-U", f"{username}%{password}",
+            ["smbclient", f"//{ip}/{share}", "-U", username,
              "-c", f"ls {cmd_path}*"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=10, env=env
         )
         entries = []
         pdf_count = 0
@@ -220,6 +232,8 @@ def api_setup_mount_nas():
     username = data.get("username", "").strip()
     password = data.get("password", "")
     mount_point = "/mnt/nas/faxe"
+    if not re.match(r"^[\d.]+$", ip):
+        return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
 
     smb_path = f"//{ip}/{share}"
     if path:
@@ -268,30 +282,46 @@ def api_setup_mount_nas():
         return jsonify({"ok": False, "error": str(e)})
 
 
+def _discover_printers_impl():
+    """Netzwerkdrucker via CUPS/lpinfo suchen (gemeinsame Logik)."""
+    r = subprocess.run(
+        ["sudo", SETUP_HELPER, "discover-printers"],
+        capture_output=True, text=True, timeout=20
+    )
+    printers = []
+    seen = set()
+    for line in r.stdout.splitlines():
+        if line.strip() == "---END---":
+            break
+        parts = line.strip().split(" ", 1)
+        if len(parts) == 2:
+            uri = parts[1].strip()
+            if uri in seen:
+                continue
+            seen.add(uri)
+            name = uri.split("/")[-1] if "/" in uri else uri
+            name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+            printers.append({"uri": uri, "name": name})
+    return printers
+
+
+def _add_printer_impl(name, uri):
+    """Drucker in CUPS einrichten (gemeinsame Logik). Gibt (ok, error_or_name) zurueck."""
+    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+    r = subprocess.run(
+        ["sudo", SETUP_HELPER, "add-printer", name, uri, "everywhere"],
+        capture_output=True, text=True, timeout=15
+    )
+    if r.returncode != 0:
+        return False, r.stderr.strip() or "Drucker konnte nicht hinzugefuegt werden"
+    return True, name
+
+
 @app.route("/api/setup/discover-printers", methods=["POST"])
 def api_setup_discover_printers():
     """Netzwerkdrucker via CUPS/lpinfo suchen."""
     try:
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "discover-printers"],
-            capture_output=True, text=True, timeout=20
-        )
-        printers = []
-        seen = set()
-        for line in r.stdout.splitlines():
-            if line.strip() == "---END---":
-                break
-            parts = line.strip().split(" ", 1)
-            if len(parts) == 2:
-                uri = parts[1].strip()
-                if uri in seen:
-                    continue
-                seen.add(uri)
-                # Druckernamen aus URI ableiten
-                name = uri.split("/")[-1] if "/" in uri else uri
-                # Bereinigen
-                name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-                printers.append({"uri": uri, "name": name})
+        printers = _discover_printers_impl()
         return jsonify({"ok": True, "printers": printers})
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "printers": [], "error": "Suche dauert zu lange — evtl. keine Netzwerkdrucker erreichbar"})
@@ -307,16 +337,11 @@ def api_setup_add_printer():
     uri = data.get("uri", "").strip()
     if not name or not uri:
         return jsonify({"ok": False, "error": "Name und URI erforderlich"})
-    # Name sanitizen
-    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
     try:
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "add-printer", name, uri, "everywhere"],
-            capture_output=True, text=True, timeout=15
-        )
-        if r.returncode != 0:
-            return jsonify({"ok": False, "error": r.stderr.strip() or "Drucker konnte nicht hinzugefuegt werden"})
-        return jsonify({"ok": True, "name": name})
+        ok, result = _add_printer_impl(name, uri)
+        if not ok:
+            return jsonify({"ok": False, "error": result})
+        return jsonify({"ok": True, "name": result})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -437,8 +462,8 @@ def address_book():
     try:
         from printer import get_printers
         printers = get_printers()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Drucker konnten nicht geladen werden: %s", e)
     return render_template("address_book.html", entries=entries, printers=printers, categories=config.FAX_CATEGORIES)
 
 
@@ -448,8 +473,8 @@ def settings():
     try:
         from printer import get_printers
         printers = get_printers()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Drucker konnten nicht geladen werden: %s", e)
     return render_template(
         "settings.html",
         printers=printers,
@@ -638,24 +663,7 @@ def api_delete_print_rule(rule_id):
 def api_discover_printers():
     """Netzwerkdrucker via CUPS/lpinfo suchen."""
     try:
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "discover-printers"],
-            capture_output=True, text=True, timeout=20
-        )
-        printers = []
-        seen = set()
-        for line in r.stdout.splitlines():
-            if line.strip() == "---END---":
-                break
-            parts = line.strip().split(" ", 1)
-            if len(parts) == 2:
-                uri = parts[1].strip()
-                if uri in seen:
-                    continue
-                seen.add(uri)
-                name = uri.split("/")[-1] if "/" in uri else uri
-                name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-                printers.append({"uri": uri, "name": name})
+        printers = _discover_printers_impl()
         return jsonify({"ok": True, "printers": printers})
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "printers": [], "error": "Suche dauert zu lange"})
@@ -671,15 +679,11 @@ def api_add_printer():
     uri = data.get("uri", "").strip()
     if not name or not uri:
         return jsonify({"ok": False, "error": "Name und URI erforderlich"})
-    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
     try:
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "add-printer", name, uri, "everywhere"],
-            capture_output=True, text=True, timeout=15
-        )
-        if r.returncode != 0:
-            return jsonify({"ok": False, "error": r.stderr.strip() or "Drucker konnte nicht hinzugefuegt werden"})
-        return jsonify({"ok": True, "name": name})
+        ok, result = _add_printer_impl(name, uri)
+        if not ok:
+            return jsonify({"ok": False, "error": result})
+        return jsonify({"ok": True, "name": result})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -788,41 +792,49 @@ def _save_env_settings():
 
 # --- UDP Discovery ---
 
+DISCOVERY_PORT = 9742  # Fester Discovery-Port, unabhaengig vom Web-Port
+
+
 def _discovery_responder():
     """UDP-Discovery: Antwortet auf Broadcast-Anfragen von Clients."""
     import logging
     logger = logging.getLogger(__name__)
-    discovery_port = config.PORT + 1
+    discovery_port = DISCOVERY_PORT
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("0.0.0.0", discovery_port))
         logger.info("UDP-Discovery lauscht auf Port %d", discovery_port)
         while True:
-            data, addr = sock.recvfrom(1024)
-            if data == b"FAXNODE_DISCOVER":
-                response = json.dumps({
-                    "service": "faxnode",
-                    "port": config.PORT,
-                    "hostname": socket.gethostname(),
-                    "version": "1.1",
-                }, ensure_ascii=False).encode()
-                sock.sendto(response, addr)
+            try:
+                data, addr = sock.recvfrom(1024)
+                if data == b"FAXNODE_DISCOVER":
+                    response = json.dumps({
+                        "service": "faxnode",
+                        "port": config.PORT,
+                        "hostname": socket.gethostname(),
+                        "version": "1.1",
+                    }, ensure_ascii=False).encode()
+                    sock.sendto(response, addr)
+            except Exception as e:
+                logger.warning("UDP-Discovery Paket-Fehler: %s", e)
     except Exception as e:
-        logger.error("UDP-Discovery Fehler: %s", e)
+        logger.error("UDP-Discovery konnte nicht gestartet werden: %s", e)
 
 
 # --- Startup ---
 
 _background_started = False
+_background_lock = threading.Lock()
 
 
 def start_background_services():
     """Hintergrund-Services starten (Watcher, OCR, Scheduler, Discovery)."""
     global _background_started
-    if _background_started:
-        return
-    _background_started = True
+    with _background_lock:
+        if _background_started:
+            return
+        _background_started = True
 
     from watcher import start_watcher
     from ocr import start_ocr_worker

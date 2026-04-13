@@ -69,7 +69,7 @@
                 <button class="status-btn{% if fax.status == key %} active{% endif %}" data-status="{{ key }}" onclick="event.preventDefault(); event.stopPropagation(); setStatus({{ fax.id }}, '{{ key }}')">{{ label }}</button>
                 {% endfor %}
             </div>
-            <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken">&#128424;</button>
+            <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken" aria-label="Fax drucken">&#128424;</button>
         </div>
     </div>
     {% endfor %}
@@ -142,7 +142,7 @@ function loadMore() {
         .then(function(r) { return r.json(); })
         .then(function(faxes) {
             document.getElementById('load-spinner').style.display = 'none';
-            if (faxes.length === 0) { _done = true; return; }
+            if (faxes.length === 0) { _done = true; _loading = false; return; }
             if (faxes.length < 30) _done = true;
             var list = document.getElementById('fax-list');
             faxes.forEach(function(f) {
@@ -150,6 +150,10 @@ function loadMore() {
             });
             if (!_done) document.getElementById('load-more').style.display = 'flex';
             _loading = false;
+        }).catch(function() {
+            document.getElementById('load-spinner').style.display = 'none';
+            _loading = false;
+            _page--;
         });
 }
 

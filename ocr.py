@@ -31,39 +31,42 @@ def _ocr_worker():
             import pytesseract
 
             images = convert_from_path(file_path, dpi=150)
+            try:
+                # Thumbnail generieren falls fehlend
+                has_thumbnail = bool(fax["thumbnail_path"])
+                if not has_thumbnail:
+                    thumbnail_path = _generate_thumbnail(fax_id, images[0])
+                    if thumbnail_path:
+                        db.update_fax_thumbnail(fax_id, thumbnail_path)
+                        has_thumbnail = True
 
-            # Thumbnail generieren falls fehlend
-            has_thumbnail = bool(fax["thumbnail_path"])
-            if not has_thumbnail:
-                thumbnail_path = _generate_thumbnail(fax_id, images[0])
-                if thumbnail_path:
-                    db.update_fax_thumbnail(fax_id, thumbnail_path)
-                    has_thumbnail = True
+                # OCR nur wenn noch nicht erledigt
+                if fax["ocr_done"] != 1:
+                    logger.info("OCR starten: Fax %d (%s)", fax_id, fax["filename"])
+                    texts = []
+                    for i, image in enumerate(images):
+                        text = pytesseract.image_to_string(image, lang=config.OCR_LANGUAGE)
+                        texts.append(text.strip())
 
-            # OCR nur wenn noch nicht erledigt
-            if fax["ocr_done"] != 1:
-                logger.info("OCR starten: Fax %d (%s)", fax_id, fax["filename"])
-                texts = []
-                for i, image in enumerate(images):
-                    text = pytesseract.image_to_string(image, lang=config.OCR_LANGUAGE)
-                    texts.append(text.strip())
+                    full_text = "\n\n".join(texts)
+                    page_count = len(images)
 
-                full_text = "\n\n".join(texts)
-                page_count = len(images)
+                    db.update_fax_ocr(fax_id, full_text, ocr_done=1)
+                    with db.db_connection() as conn:
+                        conn.execute(
+                            "UPDATE faxes SET page_count = ? WHERE id = ?",
+                            (page_count, fax_id)
+                        )
+                else:
+                    logger.info("Thumbnail nachgeneriert: Fax %d", fax_id)
+                    page_count = fax["page_count"] or len(images)
+                    full_text = fax["ocr_text"] or ""
 
-                db.update_fax_ocr(fax_id, full_text, ocr_done=1)
-                with db.db_connection() as conn:
-                    conn.execute(
-                        "UPDATE faxes SET page_count = ? WHERE id = ?",
-                        (page_count, fax_id)
-                    )
-            else:
-                logger.info("Thumbnail nachgeneriert: Fax %d", fax_id)
-                page_count = fax["page_count"] or len(images)
-                full_text = fax["ocr_text"] or ""
-
-            logger.info("OCR fertig: Fax %d (%d Seiten, %d Zeichen)",
-                        fax_id, page_count, len(full_text))
+                logger.info("OCR fertig: Fax %d (%d Seiten, %d Zeichen)",
+                            fax_id, page_count, len(full_text))
+            finally:
+                for img in images:
+                    img.close()
 
             # SSE broadcast (mit OCR-Text fuer Frontend-Preview)
             if _broadcast:
@@ -93,10 +96,13 @@ def _generate_thumbnail(fax_id, image):
         os.makedirs(thumb_dir, exist_ok=True)
         thumb_path = os.path.join(thumb_dir, f"{fax_id}.png")
         thumb = image.copy()
-        thumb.thumbnail((200, 280))
-        thumb.save(thumb_path, "PNG", optimize=True)
-        logger.debug("Thumbnail erstellt: %s", thumb_path)
-        return thumb_path
+        try:
+            thumb.thumbnail((200, 280))
+            thumb.save(thumb_path, "PNG", optimize=True)
+            logger.debug("Thumbnail erstellt: %s", thumb_path)
+            return thumb_path
+        finally:
+            thumb.close()
     except Exception as e:
         logger.warning("Thumbnail-Generierung fehlgeschlagen: %s", e)
         return None

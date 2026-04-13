@@ -86,7 +86,7 @@
                 </td>
                 <td class="text-muted">{{ entry.notes or '' }}</td>
                 <td style="white-space:nowrap;">
-                    <button class="btn btn-sm btn-ghost" onclick="editAddress({{ entry.id }}, '{{ entry.phone_number }}', '{{ entry.name }}', '{{ entry.default_category }}', '{{ entry.notes or '' }}', {{ entry.auto_print or 0 }}, '{{ entry.printer_name or '' }}', {{ entry.print_copies or 1 }})">Bearbeiten</button>
+                    <button class="btn btn-sm btn-ghost" data-edit='{{ {"id": entry.id, "phone_number": entry.phone_number, "name": entry.name, "default_category": entry.default_category, "notes": entry.notes or "", "auto_print": entry.auto_print or 0, "printer_name": entry.printer_name or "", "print_copies": entry.print_copies or 1}|tojson }}' onclick="editAddressFromData(this)">Bearbeiten</button>
                     <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteAddress({{ entry.id }})">Loeschen</button>
                 </td>
             </tr>
@@ -109,6 +109,11 @@ function resetAddressForm() {
     document.getElementById('address-form-title').textContent = 'Neuer Eintrag';
     document.getElementById('address-form').reset();
     document.getElementById('form-print-opts').style.display = 'none';
+}
+
+function editAddressFromData(btn) {
+    var d = JSON.parse(btn.getAttribute('data-edit'));
+    editAddress(d.id, d.phone_number, d.name, d.default_category, d.notes, d.auto_print, d.printer_name, d.print_copies);
 }
 
 function editAddress(id, phone, name, category, notes, autoPrint, printer, copies) {

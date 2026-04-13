@@ -16,7 +16,22 @@ DATABASE = str(BASE_DIR / "data" / "faxnode.db")
 # Server
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "9741"))
-SECRET_KEY = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+def _get_or_create_secret_key():
+    """SECRET_KEY aus .env lesen oder einmalig generieren und persistieren."""
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    key = secrets.token_hex(32)
+    env_path = BASE_DIR / ".env"
+    # Key in .env anfuegen, damit er beim naechsten Start erhalten bleibt
+    try:
+        with open(env_path, "a") as f:
+            f.write(f"SECRET_KEY={key}\n")
+    except OSError:
+        pass  # Funktioniert trotzdem, wird nur nicht persistiert
+    return key
+
+SECRET_KEY = _get_or_create_secret_key()
 
 # FritzBox Dateiname: DD.MM.YY_HH.MM_Telefax.RUFNUMMER.pdf
 FAX_FILENAME_PATTERN = r"(\d{2})\.(\d{2})\.(\d{2})_(\d{2})\.(\d{2})_Telefax\.(\d+)\.pdf"
