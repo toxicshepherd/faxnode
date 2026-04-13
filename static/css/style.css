@@ -339,7 +339,9 @@ a { color: var(--accent); text-decoration: none; }
 
 .fax-card-actions {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
     flex-shrink: 0;
 }
 
@@ -394,7 +396,7 @@ a { color: var(--accent); text-decoration: none; }
 .meta-row:last-child { border-bottom: none; }
 .meta-label { color: var(--text-muted); font-size: 0.8125rem; }
 
-/* Status Select */
+/* Status Select (legacy) */
 .status-select {
     font-family: var(--font-mono);
     font-size: 0.8125rem;
@@ -406,6 +408,34 @@ a { color: var(--accent); text-decoration: none; }
     cursor: pointer;
     outline: none;
 }
+
+/* Status Buttons */
+.status-btns {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+.status-btn {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all 0.15s ease;
+    background: rgba(125, 133, 144, 0.08);
+    color: var(--text-muted);
+}
+.status-btn:hover { opacity: 0.85; }
+.status-btn.active, .status-btn[data-status="neu"].active { background: rgba(88, 166, 255, 0.15); color: var(--info); border-color: rgba(88, 166, 255, 0.3); }
+.status-btn[data-status="gelesen"].active { background: rgba(210, 153, 34, 0.15); color: var(--warning); border-color: rgba(210, 153, 34, 0.3); }
+.status-btn[data-status="bearbeitet"].active { background: var(--accent-dim); color: var(--accent); border-color: rgba(57, 211, 83, 0.3); }
+.status-btn[data-status="erledigt"].active { background: rgba(125, 133, 144, 0.15); color: var(--text-muted); border-color: rgba(125, 133, 144, 0.3); }
+/* Compact variant for list view */
+.status-btns-sm .status-btn { font-size: 0.6rem; padding: 0.15rem 0.35rem; }
 
 /* OCR Text */
 .ocr-text {
@@ -526,6 +556,14 @@ a { color: var(--accent); text-decoration: none; }
 /* Settings */
 .settings-section { margin-bottom: 1.5rem; }
 .settings-section p { margin-bottom: 1rem; }
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
 
 /* Empty State */
 .empty-state {

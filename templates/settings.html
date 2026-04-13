@@ -7,78 +7,135 @@
 </div>
 
 <div class="settings-section card">
-    <h3>Auto-Druck Regeln</h3>
-    <p class="text-muted">Faxe von bestimmten Absendern automatisch an einen Drucker senden.</p>
+    <h3>Kategorien / Tags</h3>
+    <p class="text-muted" style="margin-bottom:1rem;font-size:0.85rem;">Kategorien fuer die Fax-Zuordnung. Neue Kategorien werden sofort verfuegbar.</p>
 
-    <div id="rule-form-container" style="display:none; margin-bottom:1.5rem;">
-        <form id="rule-form" onsubmit="saveRule(event)">
-            <div class="form-row">
-                <label>Faxnummer</label>
-                <input type="text" name="phone_number" placeholder="z.B. 05721924822" required>
-            </div>
-            <div class="form-row">
-                <label>Drucker</label>
-                <select name="printer_name" required>
-                    <option value="">Drucker waehlen...</option>
-                    {% for name, info in printers.items() %}
-                    <option value="{{ name }}">{{ name }}</option>
-                    {% endfor %}
-                    {% if not printers %}
-                    <option disabled>Keine Drucker gefunden</option>
-                    {% endif %}
-                </select>
-            </div>
-            <div class="form-row">
-                <label>Kopien</label>
-                <input type="number" name="copies" value="1" min="1" max="10">
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-sm">Speichern</button>
-                <button type="button" class="btn btn-sm btn-ghost" onclick="toggleRuleForm()">Abbrechen</button>
-            </div>
-        </form>
+    <div id="category-list">
+        {% for key, label in categories.items() %}
+        <div class="settings-row">
+            <span class="cat-badge cat-{{ key }}">{{ label }}</span>
+            <span class="mono-sm text-muted">{{ key }}</span>
+            {% if key not in ['rezept', 'bestellung', 'lieferschein', 'rueckruf', 'sonstiges'] %}
+            <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteCategory('{{ key }}')">Entfernen</button>
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
 
-    <button class="btn btn-sm" onclick="toggleRuleForm()" id="add-rule-btn">+ Regel hinzufuegen</button>
-
-    <div class="table-container" style="margin-top:1rem;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Absender</th>
-                    <th>Faxnummer</th>
-                    <th>Drucker</th>
-                    <th>Kopien</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for rule in rules %}
-                <tr>
-                    <td>{{ rule.sender_name or '–' }}</td>
-                    <td class="mono-sm">{{ rule.phone_number }}</td>
-                    <td class="mono-sm">{{ rule.printer_name }}</td>
-                    <td>{{ rule.copies }}</td>
-                    <td><button class="btn btn-sm btn-ghost btn-danger" onclick="deleteRule({{ rule.id }})">Loeschen</button></td>
-                </tr>
-                {% endfor %}
-                {% if not rules %}
-                <tr><td colspan="5" class="text-muted">Keine Regeln konfiguriert</td></tr>
-                {% endif %}
-            </tbody>
-        </table>
+    <div style="margin-top:1rem; display:flex; gap:0.5rem; align-items:end;">
+        <div style="flex:1;">
+            <label style="font-size:0.8rem; color:var(--text-muted);">Neuer Tag (Kurzname)</label>
+            <input type="text" id="new-cat-key" placeholder="z.B. labor" style="width:100%;">
+        </div>
+        <div style="flex:1;">
+            <label style="font-size:0.8rem; color:var(--text-muted);">Anzeigename</label>
+            <input type="text" id="new-cat-label" placeholder="z.B. Labor" style="width:100%;">
+        </div>
+        <button class="btn btn-sm" onclick="addCategory()">Hinzufuegen</button>
     </div>
+</div>
+
+<div class="settings-section card">
+    <h3>Drucker</h3>
+    <p class="text-muted" style="margin-bottom:1rem;font-size:0.85rem;">In CUPS eingerichtete Drucker. Auto-Druck wird im Adressbuch pro Absender konfiguriert.</p>
+
+    <div id="printer-list">
+        {% for name, info in printers.items() %}
+        <div class="settings-row">
+            <span class="mono-sm">{{ name }}</span>
+            <span class="text-muted" style="font-size:0.8rem;">{{ info.get('printer-info', '') }}</span>
+        </div>
+        {% endfor %}
+        {% if not printers %}
+        <p class="text-muted">Keine Drucker eingerichtet. Drucker koennen im Setup-Wizard oder ueber CUPS (Port 631) hinzugefuegt werden.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="settings-section card">
+    <h3>Archivierung</h3>
+    <p class="text-muted" style="margin-bottom:1rem;font-size:0.85rem;">Zeitraeume fuer automatische Archivierung und Loeschung.</p>
+
+    <form id="archive-settings" onsubmit="saveArchiveSettings(event)">
+        <div class="form-row">
+            <label>Erledigte Faxe archivieren nach</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <input type="number" name="archive_days" value="{{ archive_days }}" min="1" max="365" style="width:80px;">
+                <span class="text-muted">Tagen</span>
+            </div>
+        </div>
+        <div class="form-row">
+            <label>Alle Faxe archivieren nach (unabhaengig vom Status)</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <input type="number" name="force_archive_days" value="{{ force_archive_days }}" min="1" max="365" style="width:80px;">
+                <span class="text-muted">Tagen</span>
+            </div>
+        </div>
+        <div class="form-row">
+            <label>Archivierte Faxe endgueltig loeschen nach</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <input type="number" name="delete_days" value="{{ delete_days }}" min="30" max="3650" style="width:80px;">
+                <span class="text-muted">Tagen</span>
+            </div>
+        </div>
+        <div class="form-actions" style="margin-top:1rem;">
+            <button type="submit" class="btn btn-sm">Speichern</button>
+        </div>
+    </form>
 </div>
 
 <div class="settings-section card">
     <h3>System</h3>
     <div class="meta-row">
-        <span class="meta-label">Auto-Archiv</span>
-        <span>Nach 7 Tagen (Status "Erledigt")</span>
+        <span class="meta-label">Version</span>
+        <span class="mono-sm">FaxNode v1.0</span>
     </div>
     <div class="meta-row">
-        <span class="meta-label">Auto-Loeschung</span>
-        <span>Nach 3 Monaten (archivierte Faxe)</span>
+        <span class="meta-label">Fax-Verzeichnis</span>
+        <span class="mono-sm">{{ fax_watch_dir }}</span>
+    </div>
+    <div class="meta-row">
+        <span class="meta-label">Datenbank</span>
+        <span class="mono-sm">{{ database_path }}</span>
     </div>
 </div>
+
+<script>
+function addCategory() {
+    var key = document.getElementById('new-cat-key').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    var label = document.getElementById('new-cat-label').value.trim();
+    if (!key || !label) { alert('Kurzname und Anzeigename erforderlich'); return; }
+    fetch('/api/einstellungen/kategorie', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: key, label: label})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) location.reload();
+        else alert(d.error || 'Fehler');
+    });
+}
+
+function deleteCategory(key) {
+    if (!confirm('Kategorie "' + key + '" wirklich entfernen?')) return;
+    fetch('/api/einstellungen/kategorie/' + key, {method: 'DELETE'})
+        .then(function() { location.reload(); });
+}
+
+function saveArchiveSettings(e) {
+    e.preventDefault();
+    var form = e.target;
+    fetch('/api/einstellungen/archiv', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            archive_days: parseInt(form.querySelector('[name=archive_days]').value),
+            force_archive_days: parseInt(form.querySelector('[name=force_archive_days]').value),
+            delete_days: parseInt(form.querySelector('[name=delete_days]').value)
+        })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) location.reload();
+        else alert(d.error || 'Fehler');
+    });
+}
+</script>
 {% endblock %}

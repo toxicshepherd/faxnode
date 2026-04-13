@@ -49,18 +49,12 @@
         <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-content">
             <div class="fax-card-header">
                 <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
-                <div class="fax-card-badges">
-                    <span class="cat-badge cat-{{ fax.category }}">{{ categories.get(fax.category, 'Sonstiges') }}</span>
-                    <span class="fax-status badge badge-{{ fax.status }}" data-fax-id="{{ fax.id }}">{{ statuses[fax.status] }}</span>
-                </div>
+                <span class="cat-badge cat-{{ fax.category }}">{{ categories.get(fax.category, 'Sonstiges') }}</span>
             </div>
             <div class="fax-card-meta">
-                <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
+                <span class="mono-sm">{{ fax.received_at[:10].split('-')|reverse|join('.') }} {{ fax.received_at[11:16] }}</span>
                 {% if fax.sender_name %}
                 <span class="mono-sm text-muted">{{ fax.phone_number }}</span>
-                {% endif %}
-                {% if fax.page_count > 1 %}
-                <span class="mono-sm text-muted">{{ fax.page_count }} Seiten</span>
                 {% endif %}
             </div>
             {% if fax.ocr_text %}
@@ -70,7 +64,12 @@
             {% endif %}
         </a>
         <div class="fax-card-actions">
-            <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken">&#128424;</button>
+            <div class="status-btns status-btns-sm" data-fax-id="{{ fax.id }}">
+                {% for key, label in statuses.items() %}
+                <button class="status-btn{% if fax.status == key %} active{% endif %}" data-status="{{ key }}" onclick="event.preventDefault(); event.stopPropagation(); setStatus({{ fax.id }}, '{{ key }}')">{{ label }}</button>
+                {% endfor %}
+            </div>
+            <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken">&#128424;</button>
         </div>
     </div>
     {% endfor %}
@@ -102,13 +101,11 @@ var _search = {{ search|tojson }};
 function renderFaxCard(f) {
     var sender = f.sender_name || f.phone_number;
     var catLabel = _categories[f.category] || 'Sonstiges';
-    var statusLabel = _statuses[f.status] || f.status;
     var thumb = f.thumbnail_path
         ? '<img src="/static/thumbnails/' + f.id + '.png" alt="Vorschau" loading="lazy">'
         : '<div class="thumb-placeholder">' + (f.ocr_done === 0 ? '...' : 'PDF') + '</div>';
-    var meta = '<span class="mono-sm">' + escapeHtml((f.received_at || '').replace('T', ' ')) + '</span>';
+    var meta = '<span class="mono-sm">' + escapeHtml(formatDate(f.received_at)) + '</span>';
     if (f.sender_name) meta += '<span class="mono-sm text-muted">' + escapeHtml(f.phone_number) + '</span>';
-    if (f.page_count > 1) meta += '<span class="mono-sm text-muted">' + f.page_count + ' Seiten</span>';
     var preview = '';
     if (f.ocr_text) {
         var txt = f.ocr_text.length > 150 ? f.ocr_text.substring(0, 150) + '...' : f.ocr_text;
@@ -116,14 +113,19 @@ function renderFaxCard(f) {
     } else if (f.ocr_done === 0) {
         preview = '<div class="fax-card-preview text-muted mono-sm">OCR wird verarbeitet...</div>';
     }
+    var statusBtns = '<div class="status-btns status-btns-sm" data-fax-id="' + f.id + '">';
+    for (var k in _statuses) {
+        statusBtns += '<button class="status-btn' + (f.status === k ? ' active' : '') + '" data-status="' + k + '" onclick="event.preventDefault();event.stopPropagation();setStatus(' + f.id + ',\'' + k + '\')">' + escapeHtml(_statuses[k]) + '</button>';
+    }
+    statusBtns += '</div>';
     return '<div class="fax-card-row" data-fax-id="' + f.id + '">' +
         '<a href="/faxe/' + f.id + '" class="fax-card-thumb">' + thumb + '</a>' +
         '<a href="/faxe/' + f.id + '" class="fax-card-content">' +
         '<div class="fax-card-header"><span class="fax-sender">' + escapeHtml(sender) + '</span>' +
-        '<div class="fax-card-badges"><span class="cat-badge cat-' + f.category + '">' + escapeHtml(catLabel) + '</span>' +
-        '<span class="fax-status badge badge-' + f.status + '" data-fax-id="' + f.id + '">' + escapeHtml(statusLabel) + '</span></div></div>' +
+        '<span class="cat-badge cat-' + f.category + '">' + escapeHtml(catLabel) + '</span></div>' +
         '<div class="fax-card-meta">' + meta + '</div>' + preview + '</a>' +
-        '<div class="fax-card-actions"><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); quickPrint(' + f.id + ')" title="Drucken">&#128424;</button></div></div>';
+        '<div class="fax-card-actions">' + statusBtns +
+        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();quickPrint(' + f.id + ')" title="Drucken">&#128424;</button></div></div>';
 }
 
 function loadMore() {

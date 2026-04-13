@@ -2,7 +2,7 @@
 {% block title %}Fax von {{ fax.sender_name or fax.phone_number }} — FaxNode{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header" data-auto-read="{{ fax.id }}" data-current-status="{{ fax.status }}">
     <a href="{{ url_for('fax_list') }}" class="btn btn-sm btn-ghost">&larr; Zurueck</a>
     <h1>{{ fax.sender_name or fax.phone_number }}</h1>
 </div>
@@ -28,7 +28,7 @@
             {% endif %}
             <div class="meta-row">
                 <span class="meta-label">Empfangen</span>
-                <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
+                <span class="mono-sm">{{ fax.received_at[:10].split('-')|reverse|join('.') }} {{ fax.received_at[11:16] }}</span>
             </div>
             <div class="meta-row">
                 <span class="meta-label">Datei</span>
@@ -36,11 +36,11 @@
             </div>
             <div class="meta-row">
                 <span class="meta-label">Status</span>
-                <select id="status-select" class="status-select badge-{{ fax.status }}" data-fax-id="{{ fax.id }}">
+                <div class="status-btns" data-fax-id="{{ fax.id }}">
                     {% for key, label in statuses.items() %}
-                    <option value="{{ key }}" {% if fax.status == key %}selected{% endif %}>{{ label }}</option>
+                    <button class="status-btn{% if fax.status == key %} active{% endif %}" data-status="{{ key }}" onclick="setStatus({{ fax.id }}, '{{ key }}')">{{ label }}</button>
                     {% endfor %}
-                </select>
+                </div>
             </div>
             <div class="meta-row">
                 <span class="meta-label">Kategorie</span>

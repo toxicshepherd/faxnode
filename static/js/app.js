@@ -7,13 +7,21 @@ function updateTabTitle() {
     document.title = _unreadCount > 0 ? '(' + _unreadCount + ') ' + base : base;
 }
 updateTabTitle();
-// Poll unread count every 30s for tabs that aren't on /faxe
 setInterval(function() {
     fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
         _unreadCount = d.count;
         updateTabTitle();
     });
 }, 30000);
+
+// --- Date Formatting ---
+function formatDate(str) {
+    if (!str) return '';
+    // "2026-03-12T08:30:00" or "2026-03-12 08:30:00" -> "12.03.2026 08:30"
+    var m = str.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    if (m) return m[3] + '.' + m[2] + '.' + m[1] + ' ' + m[4] + ':' + m[5];
+    return str.replace('T', ' ');
+}
 
 // --- SSE ---
 var es = new EventSource('/events');
@@ -31,19 +39,18 @@ es.addEventListener('new_fax', function(e) {
 
 es.addEventListener('status_changed', function(e) {
     var d = JSON.parse(e.data);
-    // Update badge in list view
-    var badges = document.querySelectorAll('.fax-status[data-fax-id="' + d.fax_id + '"]');
-    badges.forEach(function(badge) {
-        badge.textContent = d.status_label;
-        badge.className = 'fax-status badge badge-' + d.status;
+    // Update status buttons in list and detail view
+    document.querySelectorAll('.status-btns[data-fax-id="' + d.fax_id + '"]').forEach(function(container) {
+        container.querySelectorAll('.status-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.status === d.status);
+        });
     });
-    // Update select in detail view
+    // Update legacy select
     var sel = document.querySelector('#status-select[data-fax-id="' + d.fax_id + '"]');
     if (sel && sel !== document.activeElement) {
         sel.value = d.status;
         sel.className = 'status-select badge-' + d.status;
     }
-    // Update unread count
     fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
         _unreadCount = d.count;
         updateTabTitle();
@@ -53,10 +60,7 @@ es.addEventListener('status_changed', function(e) {
 es.addEventListener('category_changed', function(e) {
     var d = JSON.parse(e.data);
     var sel = document.querySelector('#category-select[data-fax-id="' + d.fax_id + '"]');
-    if (sel && sel !== document.activeElement) {
-        sel.value = d.category;
-    }
-    // Update badge in list
+    if (sel && sel !== document.activeElement) sel.value = d.category;
     if (location.pathname === '/faxe') location.reload();
 });
 
@@ -81,28 +85,44 @@ es.addEventListener('ocr_complete', function(e) {
     if (location.pathname === '/faxe') location.reload();
 });
 
-// --- Status Change ---
-document.addEventListener('change', function(e) {
-    if (e.target.id === 'status-select') {
-        var faxId = e.target.dataset.faxId;
-        var status = e.target.value;
-        fetch('/api/fax/' + faxId + '/status', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({status: status})
+// --- Status Buttons ---
+function setStatus(faxId, status) {
+    fetch('/api/fax/' + faxId + '/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: status})
+    });
+    // Sofort visuell aktualisieren
+    document.querySelectorAll('.status-btns[data-fax-id="' + faxId + '"]').forEach(function(container) {
+        container.querySelectorAll('.status-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.status === status);
         });
-        e.target.className = 'status-select badge-' + status;
-    }
+    });
+}
+
+// --- Category Change (detail view select) ---
+document.addEventListener('change', function(e) {
     if (e.target.id === 'category-select') {
         var faxId = e.target.dataset.faxId;
-        var category = e.target.value;
         fetch('/api/fax/' + faxId + '/kategorie', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({category: category})
+            body: JSON.stringify({category: e.target.value})
         });
     }
 });
+
+// --- Auto-Read after 5 seconds ---
+(function() {
+    var faxIdEl = document.querySelector('[data-auto-read]');
+    if (!faxIdEl) return;
+    var faxId = faxIdEl.dataset.autoRead;
+    var currentStatus = faxIdEl.dataset.currentStatus;
+    if (currentStatus !== 'neu') return;
+    setTimeout(function() {
+        setStatus(parseInt(faxId), 'gelesen');
+    }, 5000);
+})();
 
 // --- Notes ---
 document.addEventListener('submit', function(e) {
@@ -139,9 +159,7 @@ function printFax(faxId) {
     });
 }
 
-function quickPrint(faxId) {
-    printFax(faxId);
-}
+function quickPrint(faxId) { printFax(faxId); }
 
 // --- Address Book ---
 function toggleAddressForm() {
@@ -174,34 +192,6 @@ function saveAddress(e) {
 function deleteAddress(id) {
     if (!confirm('Eintrag wirklich loeschen?')) return;
     fetch('/api/adressbuch/' + id, {method: 'DELETE'}).then(function() { location.reload(); });
-}
-
-// --- Print Rules ---
-function toggleRuleForm() {
-    var c = document.getElementById('rule-form-container');
-    var btn = document.getElementById('add-rule-btn');
-    c.style.display = c.style.display === 'none' ? 'block' : 'none';
-    btn.style.display = c.style.display === 'none' ? 'inline-flex' : 'none';
-}
-
-function saveRule(e) {
-    e.preventDefault();
-    var form = e.target;
-    var data = {
-        phone_number: form.querySelector('[name=phone_number]').value.trim(),
-        printer_name: form.querySelector('[name=printer_name]').value,
-        copies: parseInt(form.querySelector('[name=copies]').value) || 1
-    };
-    fetch('/api/druckregel', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    }).then(function() { location.reload(); });
-}
-
-function deleteRule(id) {
-    if (!confirm('Regel wirklich loeschen?')) return;
-    fetch('/api/druckregel/' + id, {method: 'DELETE'}).then(function() { location.reload(); });
 }
 
 // --- Notifications ---

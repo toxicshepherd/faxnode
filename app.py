@@ -408,14 +408,22 @@ def address_book():
 
 @app.route("/einstellungen")
 def settings():
-    rules = db.get_print_rules()
     printers = {}
     try:
         from printer import get_printers
         printers = get_printers()
     except Exception:
         pass
-    return render_template("settings.html", rules=rules, printers=printers)
+    return render_template(
+        "settings.html",
+        printers=printers,
+        categories=config.FAX_CATEGORIES,
+        archive_days=config.ARCHIVE_AFTER_DAYS,
+        force_archive_days=config.FORCE_ARCHIVE_AFTER_DAYS,
+        delete_days=config.DELETE_AFTER_DAYS,
+        fax_watch_dir=config.FAX_WATCH_DIR,
+        database_path=config.DATABASE,
+    )
 
 
 # --- API ---
@@ -586,6 +594,76 @@ def api_delete_print_rule(rule_id):
     return jsonify({"ok": True})
 
 
+# --- Einstellungen API ---
+
+@app.route("/api/einstellungen/kategorie", methods=["POST"])
+def api_add_category():
+    data = request.get_json()
+    key = data.get("key", "").strip().lower()
+    label = data.get("label", "").strip()
+    if not key or not label:
+        return jsonify({"ok": False, "error": "Kurzname und Anzeigename erforderlich"})
+    if key in config.FAX_CATEGORIES:
+        return jsonify({"ok": False, "error": "Kategorie existiert bereits"})
+    config.FAX_CATEGORIES[key] = label
+    _save_custom_categories()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/einstellungen/kategorie/<key>", methods=["DELETE"])
+def api_delete_category(key):
+    defaults = {"rezept", "bestellung", "lieferschein", "rueckruf", "sonstiges"}
+    if key in defaults:
+        return jsonify({"ok": False, "error": "Standard-Kategorien koennen nicht geloescht werden"})
+    config.FAX_CATEGORIES.pop(key, None)
+    _save_custom_categories()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/einstellungen/archiv", methods=["POST"])
+def api_save_archive_settings():
+    data = request.get_json()
+    archive_days = int(data.get("archive_days", 7))
+    force_archive_days = int(data.get("force_archive_days", 30))
+    delete_days = int(data.get("delete_days", 90))
+    config.ARCHIVE_AFTER_DAYS = archive_days
+    config.FORCE_ARCHIVE_AFTER_DAYS = force_archive_days
+    config.DELETE_AFTER_DAYS = delete_days
+    _save_env_settings()
+    return jsonify({"ok": True})
+
+
+def _save_custom_categories():
+    """Benutzerdefinierte Kategorien in Datei speichern."""
+    defaults = {"rezept", "bestellung", "lieferschein", "rueckruf", "sonstiges"}
+    custom = {k: v for k, v in config.FAX_CATEGORIES.items() if k not in defaults}
+    cat_file = Path(config.BASE_DIR) / "data" / "categories.json"
+    cat_file.parent.mkdir(parents=True, exist_ok=True)
+    cat_file.write_text(json.dumps(custom, ensure_ascii=False))
+
+
+def _load_custom_categories():
+    """Benutzerdefinierte Kategorien laden."""
+    cat_file = Path(config.BASE_DIR) / "data" / "categories.json"
+    if cat_file.exists():
+        custom = json.loads(cat_file.read_text())
+        config.FAX_CATEGORIES.update(custom)
+
+
+def _save_env_settings():
+    """Archiv-Einstellungen in .env speichern."""
+    env_path = Path(config.BASE_DIR) / ".env"
+    lines = []
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if not line.startswith(("ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=", "DELETE_AFTER_DAYS=")):
+                lines.append(line)
+    lines.append(f"ARCHIVE_AFTER_DAYS={config.ARCHIVE_AFTER_DAYS}")
+    lines.append(f"FORCE_ARCHIVE_AFTER_DAYS={config.FORCE_ARCHIVE_AFTER_DAYS}")
+    lines.append(f"DELETE_AFTER_DAYS={config.DELETE_AFTER_DAYS}")
+    env_path.write_text("\n".join(lines) + "\n")
+
+
 # --- Startup ---
 
 _background_started = False
@@ -609,6 +687,7 @@ def start_background_services():
 
 with app.app_context():
     db.init_db()
+    _load_custom_categories()
     if is_setup_done():
         start_background_services()
 
