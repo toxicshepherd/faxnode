@@ -10,80 +10,13 @@ import threading
 import urllib.request
 
 APP_NAME = "FaxNode"
-VERSION = "1.1.0"
+VERSION = "1.2.2"
 DISCOVERY_PORT = 9742  # Fester Discovery-Port
 
-# Installationsverzeichnis: %LOCALAPPDATA%/FaxNode/
-INSTALL_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), APP_NAME)
 # Konfigurationsverzeichnis: %APPDATA%/FaxNode/
 CONFIG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), APP_NAME)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 CA_CERT_FILE = os.path.join(CONFIG_DIR, "faxnode-ca.crt")
-
-
-# --- Installation ---
-
-def is_installed():
-    """Pruefen ob die Exe aus dem Installationsordner laeuft."""
-    exe_path = os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)
-    return os.path.normcase(exe_path).startswith(os.path.normcase(INSTALL_DIR))
-
-
-def get_installed_exe_path():
-    """Pfad zur installierten Exe zurueckgeben."""
-    return os.path.join(INSTALL_DIR, f"{APP_NAME}.exe")
-
-
-def install_self():
-    """Exe nach INSTALL_DIR kopieren, Desktop-Verknuepfung und Autostart einrichten."""
-    import shutil
-    import winreg
-
-    exe_src = os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)
-    exe_dst = get_installed_exe_path()
-
-    # 1. Exe kopieren
-    os.makedirs(INSTALL_DIR, exist_ok=True)
-    if os.path.normcase(os.path.abspath(exe_src)) != os.path.normcase(os.path.abspath(exe_dst)):
-        shutil.copy2(exe_src, exe_dst)
-
-    # 2. Desktop-Verknuepfung erstellen
-    _create_desktop_shortcut(exe_dst)
-
-    # 3. Autostart-Eintrag in Registry
-    try:
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Run",
-            0, winreg.KEY_SET_VALUE
-        )
-        winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{exe_dst}"')
-        winreg.CloseKey(key)
-    except OSError:
-        pass  # Nicht kritisch
-
-    return exe_dst
-
-
-def _create_desktop_shortcut(target_exe):
-    """Windows Desktop-Verknuepfung (.lnk) erstellen."""
-    try:
-        # PowerShell zum Erstellen der .lnk-Datei verwenden
-        desktop = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop")
-        lnk_path = os.path.join(desktop, f"{APP_NAME}.lnk")
-        ps_script = (
-            f'$s=(New-Object -COM WScript.Shell).CreateShortcut("{lnk_path}");'
-            f'$s.TargetPath="{target_exe}";'
-            f'$s.WorkingDirectory="{INSTALL_DIR}";'
-            f'$s.Description="FaxNode – Digitale Faxverwaltung";'
-            f'$s.Save()'
-        )
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
-            capture_output=True, timeout=10
-        )
-    except Exception:
-        pass  # Nicht kritisch — Installer hat ggf. schon eine erstellt
 
 
 # --- Hilfsfunktionen ---
@@ -412,17 +345,6 @@ def run_panel(host, port):
 # --- Einstiegspunkt ---
 
 def main():
-    # Self-Install: Beim ersten Start aus einem beliebigen Ordner
-    # die Exe nach %LOCALAPPDATA%\FaxNode kopieren und neu starten
-    if getattr(sys, 'frozen', False) and not is_installed():
-        try:
-            installed_exe = install_self()
-            # Neu starten aus dem Installationsordner
-            subprocess.Popen([installed_exe] + sys.argv[1:])
-            sys.exit(0)
-        except Exception:
-            pass  # Wenn Installation fehlschlaegt, trotzdem normal weitermachen
-
     config = load_config()
 
     # Bereits eingerichtet?

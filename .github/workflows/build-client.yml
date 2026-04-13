@@ -32,7 +32,5 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            client/output/FaxNode-Setup.exe
-            client/dist/FaxNode.exe
+          files: client/output/FaxNode-Setup.exe
           generate_release_notes: true
