@@ -41,14 +41,44 @@
 
     <div id="printer-list">
         {% for name, info in printers.items() %}
-        <div class="settings-row">
-            <span class="mono-sm">{{ name }}</span>
-            <span class="text-muted" style="font-size:0.8rem;">{{ info.get('printer-info', '') }}</span>
+        <div class="settings-row" id="printer-row-{{ name }}">
+            <div style="flex:1;">
+                <span class="mono-sm">{{ name }}</span>
+                <span class="text-muted" style="font-size:0.8rem;margin-left:0.5rem;">{{ info.get('printer-info', '') }}</span>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+                <button class="btn btn-sm btn-ghost" onclick="testPrinter('{{ name }}')" title="Testseite drucken">Testseite</button>
+                <button class="btn btn-sm btn-ghost btn-danger" onclick="removePrinter('{{ name }}')" title="Drucker entfernen">Entfernen</button>
+            </div>
         </div>
         {% endfor %}
         {% if not printers %}
-        <p class="text-muted">Keine Drucker eingerichtet. Drucker koennen im Setup-Wizard oder ueber CUPS (Port 631) hinzugefuegt werden.</p>
+        <p class="text-muted" id="no-printers">Keine Drucker eingerichtet.</p>
         {% endif %}
+    </div>
+
+    <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="discoverPrinters()" id="discover-btn">Netzwerk nach Druckern durchsuchen</button>
+        <button class="btn btn-sm btn-ghost" onclick="toggleManualPrinter()" id="manual-btn">Manuell hinzufuegen</button>
+    </div>
+
+    <div id="discovered-printers" style="display:none;margin-top:1rem;">
+        <p class="text-muted" style="font-size:0.85rem;margin-bottom:0.5rem;">Gefundene Drucker:</p>
+        <div id="discovered-list"></div>
+    </div>
+
+    <div id="manual-printer-form" style="display:none;margin-top:1rem;">
+        <div style="display:flex;gap:0.5rem;align-items:end;">
+            <div style="flex:1;">
+                <label style="font-size:0.8rem;color:var(--text-muted);">Name</label>
+                <input type="text" id="manual-printer-name" placeholder="z.B. HP_LaserJet" style="width:100%;">
+            </div>
+            <div style="flex:2;">
+                <label style="font-size:0.8rem;color:var(--text-muted);">URI (ipp://... oder socket://...)</label>
+                <input type="text" id="manual-printer-uri" placeholder="ipp://192.168.178.20/ipp/print" style="width:100%;">
+            </div>
+            <button class="btn btn-sm" onclick="addManualPrinter()">Hinzufuegen</button>
+        </div>
     </div>
 </div>
 
@@ -133,9 +163,103 @@ function saveArchiveSettings(e) {
             delete_days: parseInt(form.querySelector('[name=delete_days]').value)
         })
     }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) location.reload();
+        if (d.ok) showToast('Gespeichert', 'Archiv-Einstellungen aktualisiert');
         else alert(d.error || 'Fehler');
     });
+}
+
+// --- Drucker-Verwaltung ---
+
+function discoverPrinters() {
+    var btn = document.getElementById('discover-btn');
+    btn.textContent = 'Suche laeuft...';
+    btn.disabled = true;
+    fetch('/api/drucker/suchen', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            btn.textContent = 'Netzwerk nach Druckern durchsuchen';
+            btn.disabled = false;
+            var container = document.getElementById('discovered-printers');
+            var list = document.getElementById('discovered-list');
+            list.innerHTML = '';
+            if (!d.ok || d.printers.length === 0) {
+                list.innerHTML = '<p class="text-muted">Keine neuen Drucker gefunden.' + (d.error ? ' (' + d.error + ')' : '') + '</p>';
+                container.style.display = 'block';
+                return;
+            }
+            d.printers.forEach(function(p) {
+                var row = document.createElement('div');
+                row.className = 'settings-row';
+                row.innerHTML = '<div style="flex:1;"><span class="mono-sm">' + escapeHtml(p.name) + '</span>' +
+                    '<span class="text-muted" style="font-size:0.75rem;margin-left:0.5rem;">' + escapeHtml(p.uri) + '</span></div>' +
+                    '<button class="btn btn-sm" onclick="addDiscoveredPrinter(\'' + escapeHtml(p.name) + '\',\'' + escapeHtml(p.uri) + '\')">Hinzufuegen</button>';
+                list.appendChild(row);
+            });
+            container.style.display = 'block';
+        });
+}
+
+function addDiscoveredPrinter(name, uri) {
+    fetch('/api/drucker/hinzufuegen', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, uri: uri})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            showToast('Drucker hinzugefuegt', name);
+            location.reload();
+        } else {
+            alert(d.error || 'Fehler beim Hinzufuegen');
+        }
+    });
+}
+
+function toggleManualPrinter() {
+    var form = document.getElementById('manual-printer-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function addManualPrinter() {
+    var name = document.getElementById('manual-printer-name').value.trim();
+    var uri = document.getElementById('manual-printer-uri').value.trim();
+    if (!name || !uri) { alert('Name und URI erforderlich'); return; }
+    fetch('/api/drucker/hinzufuegen', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, uri: uri})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            showToast('Drucker hinzugefuegt', name);
+            location.reload();
+        } else {
+            alert(d.error || 'Fehler beim Hinzufuegen');
+        }
+    });
+}
+
+function removePrinter(name) {
+    if (!confirm('Drucker "' + name + '" wirklich entfernen?')) return;
+    fetch('/api/drucker/' + encodeURIComponent(name), {method: 'DELETE'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                showToast('Drucker entfernt', name);
+                var row = document.getElementById('printer-row-' + name);
+                if (row) row.remove();
+            } else {
+                alert(d.error || 'Fehler beim Entfernen');
+            }
+        });
+}
+
+function testPrinter(name) {
+    showToast('Testseite', 'Wird an ' + name + ' gesendet...');
+    fetch('/api/drucker/' + encodeURIComponent(name) + '/test', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) showToast('Testseite gesendet', name);
+            else alert(d.error || 'Fehler');
+        });
 }
 </script>
 {% endblock %}

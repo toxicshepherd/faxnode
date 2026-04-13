@@ -1,0 +1,32 @@
+name: Build Windows Client
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build exe
+        working-directory: client
+        run: pyinstaller --onefile --noconsole --name "FaxNode" faxnode_client.py
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: client/dist/FaxNode.exe
+          generate_release_notes: true

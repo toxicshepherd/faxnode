@@ -33,6 +33,12 @@ DELETE_AFTER_DAYS = int(os.environ.get("DELETE_AFTER_DAYS", "90"))
 # Polling-Fallback Intervall in Sekunden
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))
 
+# SSL/TLS Zertifikate
+CERT_DIR = str(BASE_DIR / "certs")
+SSL_CERT = os.path.join(CERT_DIR, "server.crt")
+SSL_KEY = os.path.join(CERT_DIR, "server.key")
+CA_CERT = os.path.join(CERT_DIR, "ca.crt")
+
 FAX_STATUSES = {
     "neu": "Neu",
     "gelesen": "Gelesen",

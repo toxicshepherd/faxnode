@@ -14,7 +14,7 @@ echo "  ╚═══════════════════════
 echo ""
 
 # 1. System-Pakete
-echo "[1/6] System-Pakete installieren..."
+echo "[1/7] System-Pakete installieren..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq \
     python3 python3-venv python3-pip \
@@ -25,6 +25,7 @@ sudo apt-get install -y -qq \
     cifs-utils \
     smbclient \
     netcat-openbsd \
+    openssl \
     git > /dev/null
 echo "      Fertig."
 
@@ -35,7 +36,7 @@ sudo systemctl enable cups -q 2>/dev/null || true
 sudo systemctl start cups 2>/dev/null || true
 
 # 2. Repo klonen
-echo "[2/6] FaxNode herunterladen..."
+echo "[2/7] FaxNode herunterladen..."
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "      Aktualisiere..."
     sudo git -C "$INSTALL_DIR" pull -q
@@ -47,22 +48,28 @@ sudo chown -R "$USER":"$USER" "$INSTALL_DIR"
 echo "      Fertig."
 
 # 3. Python-Umgebung
-echo "[3/6] Python-Umgebung einrichten..."
+echo "[3/7] Python-Umgebung einrichten..."
 python3 -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip -q
 "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -q
 echo "      Fertig."
 
 # 4. Verzeichnisse
-echo "[4/6] Verzeichnisse vorbereiten..."
+echo "[4/7] Verzeichnisse vorbereiten..."
 mkdir -p "$INSTALL_DIR/data"
 mkdir -p "$INSTALL_DIR/static/thumbnails"
 mkdir -p "$INSTALL_DIR/static/sounds"
 sudo mkdir -p /mnt/nas/faxe
 echo "      Fertig."
 
-# 5. Sudoers fuer Setup-Helper (NAS-Mount ohne Passwort)
-echo "[5/6] Berechtigungen einrichten..."
+# 5. SSL-Zertifikate generieren
+echo "[5/7] SSL-Zertifikate generieren..."
+chmod +x "$INSTALL_DIR/generate-certs.sh"
+bash "$INSTALL_DIR/generate-certs.sh" "$INSTALL_DIR/certs"
+echo "      Fertig."
+
+# 6. Sudoers fuer Setup-Helper (NAS-Mount ohne Passwort)
+echo "[6/7] Berechtigungen einrichten..."
 sudo chmod +x "$INSTALL_DIR/setup-helper.sh"
 SUDOERS_LINE="$USER ALL=(ALL) NOPASSWD: $INSTALL_DIR/setup-helper.sh"
 SUDOERS_FILE="/etc/sudoers.d/faxnode"
@@ -72,8 +79,8 @@ if [ ! -f "$SUDOERS_FILE" ] || ! grep -qF "$SUDOERS_LINE" "$SUDOERS_FILE" 2>/dev
 fi
 echo "      Fertig."
 
-# 6. systemd Service
-echo "[6/6] systemd Service einrichten..."
+# 7. systemd Service
+echo "[7/7] systemd Service einrichten..."
 sudo tee /etc/systemd/system/faxnode.service > /dev/null <<EOF
 [Unit]
 Description=FaxNode – Digitale Faxverwaltung
@@ -84,7 +91,7 @@ Type=simple
 User=$USER
 Group=$USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:5000 --timeout 120 wsgi:app
+ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:5000 --certfile $INSTALL_DIR/certs/server.crt --keyfile $INSTALL_DIR/certs/server.key --timeout 120 wsgi:app
 Restart=on-failure
 RestartSec=10
 
@@ -104,9 +111,13 @@ echo "  ════════════════════════
 echo "  FaxNode laeuft!"
 echo ""
 echo "  Oeffne im Browser:"
-echo "  http://$IP:5000"
+echo "  https://$IP:5000"
 echo ""
-echo "  Der Setup-Wizard fuehrt dich durch"
-echo "  die komplette Einrichtung."
+echo "  (Beim ersten Zugriff vom Browser:"
+echo "   Zertifikatswarnung akzeptieren)"
+echo ""
+echo "  Windows-Clients: FaxNode.exe starten"
+echo "  → Zertifikat wird automatisch"
+echo "    installiert."
 echo "  ══════════════════════════════════════"
 echo ""

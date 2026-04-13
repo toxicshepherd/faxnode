@@ -67,6 +67,28 @@ case "$CMD" in
         echo "OK"
         ;;
 
+    remove-printer)
+        # Argument: PRINTER_NAME
+        PNAME="$1"
+        if [ -z "$PNAME" ]; then
+            echo "Druckername erforderlich" >&2
+            exit 1
+        fi
+        lpadmin -x "$PNAME" 2>&1
+        echo "OK"
+        ;;
+
+    test-printer)
+        # Argument: PRINTER_NAME — Testseite drucken
+        PNAME="$1"
+        if [ -z "$PNAME" ]; then
+            echo "Druckername erforderlich" >&2
+            exit 1
+        fi
+        lp -d "$PNAME" /usr/share/cups/data/testprint 2>&1
+        echo "OK"
+        ;;
+
     *)
         echo "Unbekannter Befehl: $CMD" >&2
         exit 1
