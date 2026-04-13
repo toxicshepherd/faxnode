@@ -30,7 +30,7 @@ german.WelcomeLabel1=Willkommen bei FaxNode
 german.WelcomeLabel2=Dieses Programm installiert den FaxNode-Client auf Ihrem Computer.%n%nDer Client verbindet sich automatisch mit dem FaxNode-Server in Ihrem Netzwerk und zeigt eingehende Faxe an.%n%nKlicken Sie auf Weiter, um fortzufahren.
 
 [Tasks]
-Name: "desktopicon"; Description: "Desktop-Verknuepfung erstellen"; GroupDescription: "Zusaetzliche Optionen:"; Flags: checked
+Name: "desktopicon"; Description: "Desktop-Verknuepfung erstellen"; GroupDescription: "Zusaetzliche Optionen:"
 Name: "autostart"; Description: "Beim Windows-Start automatisch starten"; GroupDescription: "Zusaetzliche Optionen:"
 
 [Files]
