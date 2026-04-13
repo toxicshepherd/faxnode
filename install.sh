@@ -24,6 +24,7 @@ sudo apt-get install -y -qq \
     cups \
     cifs-utils \
     smbclient \
+    netcat-openbsd \
     git > /dev/null
 echo "      Fertig."
 
@@ -84,8 +85,8 @@ User=$USER
 Group=$USER
 WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:5000 --timeout 120 wsgi:app
-Restart=always
-RestartSec=5
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target

@@ -13,6 +13,18 @@ from flask import (
 import db
 import config
 
+
+def safe_int(value, default=1, minimum=1, maximum=None):
+    """Sicher einen Wert in int konvertieren."""
+    try:
+        v = int(value)
+        v = max(minimum, v)
+        if maximum is not None:
+            v = min(maximum, v)
+        return v
+    except (ValueError, TypeError):
+        return default
+
 SETUP_HELPER = str(Path(config.BASE_DIR) / "setup-helper.sh")
 
 app = Flask(__name__)
@@ -86,12 +98,18 @@ def setup():
 def api_setup_scan_network():
     """Gateway und gaengige NAS-IPs nach SMB scannen."""
     hosts = []
+    gw = None
     # Gateway ermitteln (typisch: FritzBox)
     try:
-        gw = subprocess.check_output(
-            "ip route | grep default | awk '{print $3}'",
-            shell=True, text=True, timeout=5
-        ).strip()
+        result = subprocess.run(
+            ["ip", "route"], capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("default"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    gw = parts[2]
+                    break
         if gw:
             hosts.append(gw)
     except Exception:
@@ -108,7 +126,7 @@ def api_setup_scan_network():
                 capture_output=True, timeout=3
             )
             if r.returncode == 0:
-                found.append({"ip": ip, "is_gateway": ip == (gw if 'gw' in dir() else "")})
+                found.append({"ip": ip, "is_gateway": ip == gw})
         except Exception:
             pass
     return jsonify({"ok": True, "hosts": found})
@@ -335,7 +353,7 @@ def fax_list():
     status_filter = request.args.get("status")
     category_filter = request.args.get("category")
     search = request.args.get("q")
-    page = max(1, int(request.args.get("page", 1)))
+    page = safe_int(request.args.get("page", 1), default=1)
     per_page = 30
     offset = (page - 1) * per_page
     faxes = db.get_faxes(status=status_filter, category=category_filter, archived=0, search=search, limit=per_page, offset=offset)
@@ -385,7 +403,7 @@ def fax_detail(fax_id):
 @app.route("/archiv")
 def archive():
     search = request.args.get("q")
-    page = max(1, int(request.args.get("page", 1)))
+    page = safe_int(request.args.get("page", 1), default=1)
     per_page = 30
     offset = (page - 1) * per_page
     faxes = db.get_faxes(archived=1, search=search, limit=per_page, offset=offset)
@@ -465,7 +483,7 @@ def api_add_note(fax_id):
 @app.route("/api/fax/<int:fax_id>/pdf")
 def api_serve_pdf(fax_id):
     fax = db.get_fax(fax_id)
-    if not fax:
+    if not fax or not os.path.isfile(fax["file_path"]):
         abort(404)
     return send_file(fax["file_path"], mimetype="application/pdf")
 
@@ -473,8 +491,10 @@ def api_serve_pdf(fax_id):
 @app.route("/api/fax/<int:fax_id>/drucken", methods=["POST"])
 def api_print_fax(fax_id):
     data = request.get_json()
-    printer_name = data.get("printer")
-    copies = int(data.get("copies", 1))
+    printer_name = data.get("printer", "").strip() if data.get("printer") else None
+    if not printer_name:
+        return jsonify({"error": "Drucker ist erforderlich"}), 400
+    copies = safe_int(data.get("copies", 1), default=1, maximum=50)
     fax = db.get_fax(fax_id)
     if not fax:
         abort(404)
@@ -526,7 +546,7 @@ def api_fax_list():
     status_filter = request.args.get("status")
     category_filter = request.args.get("category")
     search = request.args.get("q")
-    page = max(1, int(request.args.get("page", 1)))
+    page = safe_int(request.args.get("page", 1), default=1)
     per_page = 30
     offset = (page - 1) * per_page
     faxes = db.get_faxes(status=status_filter, category=category_filter, archived=0, search=search, limit=per_page, offset=offset)
@@ -563,7 +583,7 @@ def api_upsert_address():
     notes = data.get("notes", "").strip()
     auto_print = 1 if data.get("auto_print") else 0
     printer_name = data.get("printer_name", "").strip() or None
-    print_copies = int(data.get("print_copies", 1))
+    print_copies = safe_int(data.get("print_copies", 1), default=1, maximum=50)
     if not phone or not name:
         return jsonify({"error": "Nummer und Name sind Pflichtfelder"}), 400
     db.upsert_address(phone, name, default_category, notes, auto_print, printer_name, print_copies)
@@ -581,7 +601,7 @@ def api_upsert_print_rule():
     data = request.get_json()
     phone = data.get("phone_number", "").strip()
     printer = data.get("printer_name", "").strip()
-    copies = int(data.get("copies", 1))
+    copies = safe_int(data.get("copies", 1), default=1, maximum=50)
     if not phone or not printer:
         return jsonify({"error": "Nummer und Drucker sind Pflichtfelder"}), 400
     rule_id = db.upsert_print_rule(phone, printer, copies)
@@ -623,9 +643,9 @@ def api_delete_category(key):
 @app.route("/api/einstellungen/archiv", methods=["POST"])
 def api_save_archive_settings():
     data = request.get_json()
-    archive_days = int(data.get("archive_days", 7))
-    force_archive_days = int(data.get("force_archive_days", 30))
-    delete_days = int(data.get("delete_days", 90))
+    archive_days = safe_int(data.get("archive_days", 7), default=7, minimum=1, maximum=365)
+    force_archive_days = safe_int(data.get("force_archive_days", 30), default=30, minimum=1, maximum=365)
+    delete_days = safe_int(data.get("delete_days", 90), default=90, minimum=30, maximum=3650)
     config.ARCHIVE_AFTER_DAYS = archive_days
     config.FORCE_ARCHIVE_AFTER_DAYS = force_archive_days
     config.DELETE_AFTER_DAYS = delete_days

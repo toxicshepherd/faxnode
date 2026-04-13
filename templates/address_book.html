@@ -104,10 +104,18 @@ function togglePrintOpts() {
     document.getElementById('form-print-opts').style.display = cb.checked ? 'block' : 'none';
 }
 
+function resetAddressForm() {
+    document.getElementById('edit-id').value = '';
+    document.getElementById('address-form-title').textContent = 'Neuer Eintrag';
+    document.getElementById('address-form').reset();
+    document.getElementById('form-print-opts').style.display = 'none';
+}
+
 function editAddress(id, phone, name, category, notes, autoPrint, printer, copies) {
     var c = document.getElementById('address-form-container');
     c.style.display = 'block';
     document.getElementById('address-form-title').textContent = 'Eintrag bearbeiten';
+    document.getElementById('edit-id').value = id;
     var form = document.getElementById('address-form');
     form.querySelector('[name=phone_number]').value = phone;
     form.querySelector('[name=name]').value = name;

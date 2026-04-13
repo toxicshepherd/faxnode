@@ -109,9 +109,12 @@ def _check_auto_print(fax_id, phone_number, file_path):
     for rule in rules:
         try:
             from printer import print_fax
-            print_fax(file_path, rule["printer_name"], rule["copies"])
+            # address_book hat "print_copies", print_rules hat "copies"
+            copies = rule.get("print_copies") or rule.get("copies") or 1
+            printer_name = rule["printer_name"]
+            print_fax(file_path, printer_name, copies)
             logger.info("Auto-Print: Fax %d an %s (%d Kopien)",
-                        fax_id, rule["printer_name"], rule["copies"])
+                        fax_id, printer_name, copies)
         except Exception as e:
             logger.error("Auto-Print fehlgeschlagen: %s", e)
 
@@ -168,7 +171,7 @@ def start_watcher(broadcast_fn):
         from ocr import ocr_queue
         _ocr_queue = ocr_queue
     except ImportError:
-        pass
+        logger.warning("OCR-Modul konnte nicht importiert werden — OCR deaktiviert")
 
     # Erst synchronisieren
     sync_directory()

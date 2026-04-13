@@ -462,21 +462,21 @@ def get_stats_categories():
 
 
 def get_stats_overview():
-    """Allgemeine Statistiken."""
+    """Allgemeine Statistiken (eine Query statt fuenf)."""
     with db_connection() as conn:
-        total = conn.execute("SELECT COUNT(*) as cnt FROM faxes").fetchone()["cnt"]
-        active = conn.execute("SELECT COUNT(*) as cnt FROM faxes WHERE archived = 0").fetchone()["cnt"]
-        archived = conn.execute("SELECT COUNT(*) as cnt FROM faxes WHERE archived = 1").fetchone()["cnt"]
-        today = conn.execute(
-            "SELECT COUNT(*) as cnt FROM faxes WHERE date(received_at) = date('now')"
-        ).fetchone()["cnt"]
-        this_week = conn.execute(
-            "SELECT COUNT(*) as cnt FROM faxes WHERE received_at >= datetime('now', '-7 days')"
-        ).fetchone()["cnt"]
+        row = conn.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN archived = 0 THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN archived = 1 THEN 1 ELSE 0 END) as archived,
+                SUM(CASE WHEN date(received_at) = date('now') THEN 1 ELSE 0 END) as today,
+                SUM(CASE WHEN received_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) as this_week
+            FROM faxes
+        """).fetchone()
         return {
-            "total": total,
-            "active": active,
-            "archived": archived,
-            "today": today,
-            "this_week": this_week,
+            "total": row["total"] or 0,
+            "active": row["active"] or 0,
+            "archived": row["archived"] or 0,
+            "today": row["today"] or 0,
+            "this_week": row["this_week"] or 0,
         }

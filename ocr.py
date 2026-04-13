@@ -33,10 +33,12 @@ def _ocr_worker():
             images = convert_from_path(file_path, dpi=150)
 
             # Thumbnail generieren falls fehlend
-            if not fax["thumbnail_path"]:
+            has_thumbnail = bool(fax["thumbnail_path"])
+            if not has_thumbnail:
                 thumbnail_path = _generate_thumbnail(fax_id, images[0])
                 if thumbnail_path:
                     db.update_fax_thumbnail(fax_id, thumbnail_path)
+                    has_thumbnail = True
 
             # OCR nur wenn noch nicht erledigt
             if fax["ocr_done"] != 1:
@@ -63,12 +65,14 @@ def _ocr_worker():
             logger.info("OCR fertig: Fax %d (%d Seiten, %d Zeichen)",
                         fax_id, page_count, len(full_text))
 
-            # SSE broadcast
+            # SSE broadcast (mit OCR-Text fuer Frontend-Preview)
             if _broadcast:
                 _broadcast("ocr_complete", {
                     "fax_id": fax_id,
                     "page_count": page_count,
                     "text_length": len(full_text),
+                    "ocr_text": full_text[:200] if full_text else "",
+                    "has_thumbnail": has_thumbnail,
                 })
 
         except Exception as e:

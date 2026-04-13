@@ -26,6 +26,11 @@ function formatDate(str) {
 // --- SSE ---
 var es = new EventSource('/events');
 
+es.addEventListener('error', function() {
+    // EventSource reconnects automatisch, aber wir loggen es
+    console.warn('SSE-Verbindung unterbrochen, versuche erneut...');
+});
+
 es.addEventListener('new_fax', function(e) {
     var d = JSON.parse(e.data);
     var sender = d.sender_name || d.phone_number;
@@ -34,7 +39,13 @@ es.addEventListener('new_fax', function(e) {
     showToast('Neues Fax', sender + ' — ' + d.received_at, '/faxe/' + d.id);
     playNotificationSound();
     showBrowserNotification('Neues Fax', sender + ' — ' + d.received_at);
-    if (location.pathname === '/faxe') location.reload();
+    // Neue Fax-Karte in die Liste einfuegen statt reload
+    if (location.pathname === '/faxe' && typeof renderFaxCard === 'function') {
+        var list = document.getElementById('fax-list');
+        var empty = document.getElementById('empty-state');
+        if (empty) empty.remove();
+        if (list) list.insertAdjacentHTML('afterbegin', renderFaxCard(d));
+    }
 });
 
 es.addEventListener('status_changed', function(e) {
@@ -45,14 +56,9 @@ es.addEventListener('status_changed', function(e) {
             btn.classList.toggle('active', btn.dataset.status === d.status);
         });
     });
-    // Update legacy select
-    var sel = document.querySelector('#status-select[data-fax-id="' + d.fax_id + '"]');
-    if (sel && sel !== document.activeElement) {
-        sel.value = d.status;
-        sel.className = 'status-select badge-' + d.status;
-    }
-    fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
-        _unreadCount = d.count;
+    // Unread-Counter sofort aktualisieren
+    fetch('/api/unread').then(function(r) { return r.json(); }).then(function(u) {
+        _unreadCount = u.count;
         updateTabTitle();
     });
 });
@@ -61,7 +67,15 @@ es.addEventListener('category_changed', function(e) {
     var d = JSON.parse(e.data);
     var sel = document.querySelector('#category-select[data-fax-id="' + d.fax_id + '"]');
     if (sel && sel !== document.activeElement) sel.value = d.category;
-    if (location.pathname === '/faxe') location.reload();
+    // Kategorie-Badge in der Liste aktualisieren
+    var card = document.querySelector('.fax-card-row[data-fax-id="' + d.fax_id + '"]');
+    if (card) {
+        var badge = card.querySelector('.cat-badge');
+        if (badge) {
+            badge.className = 'cat-badge cat-' + d.category;
+            badge.textContent = d.category_label;
+        }
+    }
 });
 
 es.addEventListener('note_added', function(e) {
@@ -82,11 +96,36 @@ es.addEventListener('note_added', function(e) {
 });
 
 es.addEventListener('ocr_complete', function(e) {
-    if (location.pathname === '/faxe') location.reload();
+    var d = JSON.parse(e.data);
+    // Vorschau-Text in der Liste aktualisieren falls vorhanden
+    var card = document.querySelector('.fax-card-row[data-fax-id="' + d.fax_id + '"]');
+    if (card && d.ocr_text) {
+        var preview = card.querySelector('.fax-card-preview');
+        var txt = d.ocr_text.length > 150 ? d.ocr_text.substring(0, 150) + '...' : d.ocr_text;
+        if (preview) {
+            preview.textContent = txt;
+        } else {
+            var content = card.querySelector('.fax-card-content');
+            if (content) content.insertAdjacentHTML('beforeend', '<div class="fax-card-preview text-muted">' + escapeHtml(txt) + '</div>');
+        }
+        // Thumbnail aktualisieren
+        var thumb = card.querySelector('.fax-card-thumb');
+        if (thumb && d.fax_id) {
+            var placeholder = thumb.querySelector('.thumb-placeholder');
+            if (placeholder) {
+                placeholder.outerHTML = '<img src="/static/thumbnails/' + d.fax_id + '.png" alt="Vorschau" loading="lazy">';
+            }
+        }
+    }
 });
 
 // --- Status Buttons ---
 function setStatus(faxId, status) {
+    // Auto-Read-Timer abbrechen wenn User manuell Status setzt
+    if (_autoReadTimer) {
+        clearTimeout(_autoReadTimer);
+        _autoReadTimer = null;
+    }
     fetch('/api/fax/' + faxId + '/status', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -113,13 +152,15 @@ document.addEventListener('change', function(e) {
 });
 
 // --- Auto-Read after 5 seconds ---
+var _autoReadTimer = null;
 (function() {
     var faxIdEl = document.querySelector('[data-auto-read]');
     if (!faxIdEl) return;
     var faxId = faxIdEl.dataset.autoRead;
     var currentStatus = faxIdEl.dataset.currentStatus;
     if (currentStatus !== 'neu') return;
-    setTimeout(function() {
+    _autoReadTimer = setTimeout(function() {
+        _autoReadTimer = null;
         setStatus(parseInt(faxId), 'gelesen');
     }, 5000);
 })();
@@ -164,7 +205,9 @@ function quickPrint(faxId) { printFax(faxId); }
 // --- Address Book ---
 function toggleAddressForm() {
     var c = document.getElementById('address-form-container');
-    c.style.display = c.style.display === 'none' ? 'block' : 'none';
+    var show = c.style.display === 'none';
+    c.style.display = show ? 'block' : 'none';
+    if (!show && typeof resetAddressForm === 'function') resetAddressForm();
 }
 
 function saveAddress(e) {

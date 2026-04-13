@@ -34,6 +34,8 @@ def auto_archive():
         total = c1.rowcount + c2.rowcount
         if total > 0:
             logger.info("Auto-Archiv: %d Faxe archiviert", total)
+        else:
+            logger.debug("Auto-Archiv: keine Faxe zum Archivieren")
 
 
 def auto_delete():
