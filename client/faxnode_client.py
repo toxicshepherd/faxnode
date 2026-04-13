@@ -1,24 +1,23 @@
-"""FaxNode Client – Windows-Anwendung fuer Zertifikat-Setup und Panel-Zugriff."""
+"""FaxNode Client – Windows-Anwendung mit eingebettetem Web-Panel."""
 import ctypes
 import json
 import os
 import ssl
 import subprocess
 import sys
-import tempfile
-import tkinter as tk
-from tkinter import messagebox
+import threading
 import urllib.request
-import webbrowser
 
 APP_NAME = "FaxNode"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # Konfigurationsverzeichnis: %APPDATA%/FaxNode/
 CONFIG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), APP_NAME)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 CA_CERT_FILE = os.path.join(CONFIG_DIR, "faxnode-ca.crt")
 
+
+# --- Hilfsfunktionen ---
 
 def is_admin():
     """Prueft ob das Programm als Administrator laeuft."""
@@ -54,11 +53,7 @@ def save_config(host, port):
 
 
 def download_ca_cert(host, port):
-    """CA-Zertifikat vom FaxNode-Server herunterladen.
-
-    Verwendet verify=False nur fuer diesen einen Request,
-    da das CA-Zertifikat selbst oeffentlich und unkritisch ist.
-    """
+    """CA-Zertifikat vom FaxNode-Server herunterladen."""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -80,15 +75,6 @@ def install_ca_cert(cert_data):
     return result.returncode == 0
 
 
-def is_cert_installed():
-    """Prueft ob das FaxNode CA-Zertifikat bereits installiert ist."""
-    result = subprocess.run(
-        ["certutil", "-verifystore", "Root", "FaxNode CA"],
-        capture_output=True, text=True,
-    )
-    return result.returncode == 0
-
-
 def test_connection(host, port):
     """Testet die HTTPS-Verbindung zum Server."""
     try:
@@ -103,175 +89,201 @@ def test_connection(host, port):
         return False
 
 
-def open_panel(host, port):
-    """FaxNode im Standardbrowser oeffnen."""
-    webbrowser.open(f"https://{host}:{port}")
+def get_panel_url(host, port):
+    return f"https://{host}:{port}"
 
 
-class FaxNodeApp:
-    """Hauptfenster der FaxNode-Client-Anwendung."""
+# --- Setup-Fenster (tkinter, nur beim ersten Start) ---
 
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title(f"{APP_NAME} Client")
-        self.root.resizable(False, False)
-        self.root.configure(bg="#1a1b26")
+def run_setup(existing_config=None):
+    """Zeigt das Setup-Fenster und gibt (host, port) zurueck oder None bei Abbruch."""
+    import tkinter as tk
 
-        # Fenster zentrieren
-        w, h = 420, 340
-        x = (self.root.winfo_screenwidth() - w) // 2
-        y = (self.root.winfo_screenheight() - h) // 2
-        self.root.geometry(f"{w}x{h}+{x}+{y}")
+    result = {}
 
-        self._build_ui()
-
-    def _build_ui(self):
-        bg = "#1a1b26"
-        fg = "#c0caf5"
-        accent = "#39d353"
-        input_bg = "#24283b"
-        muted = "#565f89"
-
-        # Header
-        header = tk.Frame(self.root, bg=bg)
-        header.pack(fill="x", padx=30, pady=(25, 5))
-        tk.Label(header, text="\u26C2", font=("Segoe UI", 20), bg=bg, fg=accent).pack(side="left")
-        tk.Label(header, text=" FaxNode", font=("Segoe UI", 18, "bold"), bg=bg, fg=fg).pack(side="left")
-
-        tk.Label(self.root, text="Client-Einrichtung", font=("Segoe UI", 10),
-                 bg=bg, fg=muted).pack(anchor="w", padx=32, pady=(0, 15))
-
-        # Server-Adresse
-        form = tk.Frame(self.root, bg=bg)
-        form.pack(fill="x", padx=30)
-
-        tk.Label(form, text="Server-Adresse (IP)", font=("Segoe UI", 9),
-                 bg=bg, fg=muted).pack(anchor="w")
-        self.host_var = tk.StringVar(value="192.168.178.")
-        host_entry = tk.Entry(form, textvariable=self.host_var, font=("JetBrains Mono", 11),
-                              bg=input_bg, fg=fg, insertbackground=fg,
-                              relief="flat", bd=0, highlightthickness=1,
-                              highlightbackground="#414868", highlightcolor=accent)
-        host_entry.pack(fill="x", ipady=6, pady=(2, 10))
-
-        # Port
-        tk.Label(form, text="Port", font=("Segoe UI", 9), bg=bg, fg=muted).pack(anchor="w")
-        self.port_var = tk.StringVar(value="5000")
-        port_entry = tk.Entry(form, textvariable=self.port_var, font=("JetBrains Mono", 11),
-                              bg=input_bg, fg=fg, insertbackground=fg,
-                              relief="flat", bd=0, highlightthickness=1,
-                              highlightbackground="#414868", highlightcolor=accent)
-        port_entry.pack(fill="x", ipady=6, pady=(2, 15))
-
-        # Verbinden-Button
-        self.connect_btn = tk.Button(
-            form, text="Verbinden", font=("Segoe UI", 10, "bold"),
-            bg=accent, fg="#1a1b26", activebackground="#2ea043",
-            relief="flat", bd=0, cursor="hand2",
-            command=self._on_connect,
-        )
-        self.connect_btn.pack(fill="x", ipady=8, pady=(0, 10))
-
-        # Status
-        self.status_var = tk.StringVar(value="Bereit.")
-        self.status_label = tk.Label(
-            self.root, textvariable=self.status_var,
-            font=("Segoe UI", 9), bg=bg, fg=muted, wraplength=360,
-        )
-        self.status_label.pack(anchor="w", padx=32, pady=(0, 10))
-
-        # Bestehende Config laden
-        config = load_config()
-        if config:
-            self.host_var.set(config["host"])
-            self.port_var.set(str(config["port"]))
-
-    def _set_status(self, text, error=False):
-        self.status_var.set(text)
-        self.status_label.configure(fg="#f7768e" if error else "#565f89")
-        self.root.update_idletasks()
-
-    def _on_connect(self):
-        host = self.host_var.get().strip()
-        port = self.port_var.get().strip()
-
+    def on_connect():
+        host = host_var.get().strip()
+        port = port_var.get().strip()
         if not host:
-            self._set_status("Bitte Server-Adresse eingeben.", error=True)
+            status_var.set("Bitte Server-Adresse eingeben.")
+            status_label.configure(fg="#f7768e")
             return
         try:
             port_int = int(port)
         except ValueError:
-            self._set_status("Ungueltiger Port.", error=True)
+            status_var.set("Ungueltiger Port.")
+            status_label.configure(fg="#f7768e")
             return
 
-        self.connect_btn.configure(state="disabled", text="Verbinde...")
-        self.root.update_idletasks()
+        connect_btn.configure(state="disabled", text="Verbinde...")
+        root.update_idletasks()
 
         try:
             # 1. Verbindung testen
-            self._set_status("Verbindung wird getestet...")
+            status_var.set("Verbindung wird getestet...")
+            status_label.configure(fg="#565f89")
+            root.update_idletasks()
             if not test_connection(host, port_int):
-                self._set_status(f"Server nicht erreichbar: {host}:{port}", error=True)
+                status_var.set(f"Server nicht erreichbar: {host}:{port}")
+                status_label.configure(fg="#f7768e")
                 return
 
-            # 2. Admin-Rechte pruefen (fuer Zertifikat-Installation)
+            # 2. Admin-Rechte pruefen
             if not is_admin():
-                self._set_status("Administrator-Rechte werden benoetigt...")
-                save_config(host, port_int)  # Config schon mal speichern
+                status_var.set("Administrator-Rechte benoetigt...")
+                root.update_idletasks()
+                save_config(host, port_int)
                 relaunch_as_admin()
                 return
 
-            # 3. CA-Zertifikat herunterladen
-            self._set_status("CA-Zertifikat wird heruntergeladen...")
+            # 3. CA-Zertifikat herunterladen + installieren
+            status_var.set("Zertifikat wird installiert...")
+            root.update_idletasks()
             cert_data = download_ca_cert(host, port_int)
-            if not cert_data:
-                self._set_status("CA-Zertifikat konnte nicht heruntergeladen werden.", error=True)
+            if not cert_data or not install_ca_cert(cert_data):
+                status_var.set("Zertifikat konnte nicht installiert werden.")
+                status_label.configure(fg="#f7768e")
                 return
 
-            # 4. Zertifikat installieren
-            self._set_status("Zertifikat wird installiert...")
-            if not install_ca_cert(cert_data):
-                self._set_status("Zertifikat konnte nicht installiert werden.", error=True)
-                return
-
-            # 5. Config speichern
+            # 4. Config speichern
             save_config(host, port_int)
-
-            # 6. Browser oeffnen
-            self._set_status("Fertig! Browser wird geoeffnet...")
-            open_panel(host, port_int)
-
-            # Kurz warten, dann schliessen
-            self.root.after(1500, self.root.destroy)
+            result["host"] = host
+            result["port"] = port_int
+            root.destroy()
 
         except Exception as e:
-            self._set_status(f"Fehler: {e}", error=True)
+            status_var.set(f"Fehler: {e}")
+            status_label.configure(fg="#f7768e")
         finally:
             try:
-                self.connect_btn.configure(state="normal", text="Verbinden")
+                connect_btn.configure(state="normal", text="Verbinden")
             except tk.TclError:
                 pass
 
-    def run(self):
-        self.root.mainloop()
+    root = tk.Tk()
+    root.title(f"{APP_NAME} — Einrichtung")
+    root.resizable(False, False)
+    root.configure(bg="#1a1b26")
+    root.protocol("WM_DELETE_WINDOW", lambda: (result.clear(), root.destroy()))
 
+    w, h = 420, 340
+    x = (root.winfo_screenwidth() - w) // 2
+    y = (root.winfo_screenheight() - h) // 2
+    root.geometry(f"{w}x{h}+{x}+{y}")
+
+    bg = "#1a1b26"
+    fg = "#c0caf5"
+    accent = "#39d353"
+    input_bg = "#24283b"
+    muted = "#565f89"
+
+    header = tk.Frame(root, bg=bg)
+    header.pack(fill="x", padx=30, pady=(25, 5))
+    tk.Label(header, text="\u26C2", font=("Segoe UI", 20), bg=bg, fg=accent).pack(side="left")
+    tk.Label(header, text=" FaxNode", font=("Segoe UI", 18, "bold"), bg=bg, fg=fg).pack(side="left")
+    tk.Label(root, text="Client-Einrichtung", font=("Segoe UI", 10),
+             bg=bg, fg=muted).pack(anchor="w", padx=32, pady=(0, 15))
+
+    form = tk.Frame(root, bg=bg)
+    form.pack(fill="x", padx=30)
+
+    tk.Label(form, text="Server-Adresse (IP)", font=("Segoe UI", 9), bg=bg, fg=muted).pack(anchor="w")
+    host_var = tk.StringVar(value=existing_config["host"] if existing_config else "192.168.178.")
+    tk.Entry(form, textvariable=host_var, font=("Consolas", 11),
+             bg=input_bg, fg=fg, insertbackground=fg, relief="flat", bd=0,
+             highlightthickness=1, highlightbackground="#414868",
+             highlightcolor=accent).pack(fill="x", ipady=6, pady=(2, 10))
+
+    tk.Label(form, text="Port", font=("Segoe UI", 9), bg=bg, fg=muted).pack(anchor="w")
+    port_var = tk.StringVar(value=str(existing_config["port"]) if existing_config else "5000")
+    tk.Entry(form, textvariable=port_var, font=("Consolas", 11),
+             bg=input_bg, fg=fg, insertbackground=fg, relief="flat", bd=0,
+             highlightthickness=1, highlightbackground="#414868",
+             highlightcolor=accent).pack(fill="x", ipady=6, pady=(2, 15))
+
+    connect_btn = tk.Button(form, text="Verbinden", font=("Segoe UI", 10, "bold"),
+                            bg=accent, fg="#1a1b26", activebackground="#2ea043",
+                            relief="flat", bd=0, cursor="hand2", command=on_connect)
+    connect_btn.pack(fill="x", ipady=8, pady=(0, 10))
+
+    status_var = tk.StringVar(value="Bereit.")
+    status_label = tk.Label(root, textvariable=status_var, font=("Segoe UI", 9),
+                            bg=bg, fg=muted, wraplength=360)
+    status_label.pack(anchor="w", padx=32, pady=(0, 10))
+
+    root.mainloop()
+    return result if result else None
+
+
+# --- Hauptfenster (pywebview) ---
+
+def run_panel(host, port):
+    """FaxNode-Panel als natives Fenster mit eingebettetem WebView oeffnen."""
+    import webview
+
+    url = get_panel_url(host, port)
+
+    window = webview.create_window(
+        "FaxNode",
+        url=url,
+        width=1100,
+        height=750,
+        min_size=(800, 500),
+        text_select=True,
+        background_color="#1a1b26",
+    )
+
+    # Unread-Counter im Fenstertitel aktualisieren
+    def update_title():
+        import time
+        while not window._closed:
+            try:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                req = urllib.request.Request(f"{url}/api/unread")
+                with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+                    data = json.loads(resp.read())
+                    count = data.get("count", 0)
+                    if count > 0:
+                        window.set_title(f"({count}) FaxNode")
+                    else:
+                        window.set_title("FaxNode")
+            except Exception:
+                pass
+            time.sleep(15)
+
+    def on_loaded():
+        t = threading.Thread(target=update_title, daemon=True)
+        t.start()
+
+    window.events.loaded += on_loaded
+
+    webview.start(
+        private_mode=False,
+        storage_path=CONFIG_DIR,
+    )
+
+
+# --- Einstiegspunkt ---
 
 def main():
-    """Haupteinstiegspunkt."""
     config = load_config()
 
-    # Wenn bereits eingerichtet: direkt Browser oeffnen
+    # Bereits eingerichtet und Zertifikat vorhanden?
     if config and os.path.exists(CA_CERT_FILE):
         host = config["host"]
         port = config["port"]
         if test_connection(host, port):
-            open_panel(host, port)
+            run_panel(host, port)
             return
-        # Server nicht erreichbar — Setup zeigen
+        # Server nicht erreichbar — Setup zeigen mit bestehender Config
+        result = run_setup(existing_config=config)
+    else:
+        result = run_setup()
 
-    # Setup-Fenster anzeigen
-    app = FaxNodeApp()
-    app.run()
+    if result:
+        run_panel(result["host"], result["port"])
 
 
 if __name__ == "__main__":

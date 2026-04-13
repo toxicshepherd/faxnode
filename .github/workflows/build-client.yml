@@ -18,12 +18,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install PyInstaller
-        run: pip install pyinstaller
+      - name: Install dependencies
+        run: pip install pywebview pyinstaller
 
       - name: Build exe
         working-directory: client
-        run: pyinstaller --onefile --noconsole --name "FaxNode" faxnode_client.py
+        run: pyinstaller --onefile --noconsole --name "FaxNode" --hidden-import clr --hidden-import webview faxnode_client.py
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
