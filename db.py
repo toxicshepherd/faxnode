@@ -230,6 +230,23 @@ def get_fax_count_by_status(archived=0):
         return {row["status"]: row["cnt"] for row in rows}
 
 
+def get_fax_counts(archived=0):
+    """Status- und Kategorie-Zaehler in einer DB-Verbindung."""
+    with db_connection() as conn:
+        status_rows = conn.execute(
+            "SELECT status, COUNT(*) as cnt FROM faxes WHERE archived = ? GROUP BY status",
+            (archived,)
+        ).fetchall()
+        cat_rows = conn.execute(
+            "SELECT category, COUNT(*) as cnt FROM faxes WHERE archived = ? GROUP BY category",
+            (archived,)
+        ).fetchall()
+        return (
+            {r["status"]: r["cnt"] for r in status_rows},
+            {r["category"]: r["cnt"] for r in cat_rows},
+        )
+
+
 # --- Notizen ---
 
 def get_notes(fax_id):

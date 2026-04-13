@@ -54,7 +54,8 @@ echo "      Fertig."
 
 # 4. Verzeichnisse
 echo "[4/6] Verzeichnisse vorbereiten..."
-mkdir -p "$INSTALL_DIR/data/thumbnails"
+mkdir -p "$INSTALL_DIR/data"
+mkdir -p "$INSTALL_DIR/static/thumbnails"
 mkdir -p "$INSTALL_DIR/static/sounds"
 sudo mkdir -p /mnt/nas/faxe
 echo "      Fertig."

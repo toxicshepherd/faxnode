@@ -41,7 +41,7 @@
     <div class="fax-card-row" data-fax-id="{{ fax.id }}">
         <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-thumb">
             {% if fax.thumbnail_path %}
-            <img src="{{ url_for('api_serve_thumbnail', fax_id=fax.id) }}" alt="Vorschau" loading="lazy">
+            <img src="{{ url_for('static', filename='thumbnails/' ~ fax.id ~ '.png') }}" alt="Vorschau" loading="lazy">
             {% else %}
             <div class="thumb-placeholder">{% if fax.ocr_done == 0 %}...{% else %}PDF{% endif %}</div>
             {% endif %}
@@ -104,7 +104,7 @@ function renderFaxCard(f) {
     var catLabel = _categories[f.category] || 'Sonstiges';
     var statusLabel = _statuses[f.status] || f.status;
     var thumb = f.thumbnail_path
-        ? '<img src="/api/fax/' + f.id + '/thumbnail" alt="Vorschau" loading="lazy">'
+        ? '<img src="/static/thumbnails/' + f.id + '.png" alt="Vorschau" loading="lazy">'
         : '<div class="thumb-placeholder">' + (f.ocr_done === 0 ? '...' : 'PDF') + '</div>';
     var meta = '<span class="mono-sm">' + escapeHtml((f.received_at || '').replace('T', ' ')) + '</span>';
     if (f.sender_name) meta += '<span class="mono-sm text-muted">' + escapeHtml(f.phone_number) + '</span>';

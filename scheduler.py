@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 def auto_archive():
-    """Erledigte Faxe nach X Tagen archivieren."""
+    """Faxe automatisch archivieren."""
     with db.db_connection() as conn:
-        cursor = conn.execute(
+        # Regel 1: Erledigte Faxe nach 7 Tagen
+        c1 = conn.execute(
             """UPDATE faxes
                SET archived = 1, archived_at = CURRENT_TIMESTAMP
                WHERE archived = 0
@@ -22,8 +23,17 @@ def auto_archive():
                AND received_at < datetime('now', ?)""",
             (f"-{config.ARCHIVE_AFTER_DAYS} days",)
         )
-        if cursor.rowcount > 0:
-            logger.info("Auto-Archiv: %d Faxe archiviert", cursor.rowcount)
+        # Regel 2: Alle Faxe nach 30 Tagen, unabhaengig vom Status
+        c2 = conn.execute(
+            """UPDATE faxes
+               SET archived = 1, archived_at = CURRENT_TIMESTAMP
+               WHERE archived = 0
+               AND received_at < datetime('now', ?)""",
+            (f"-{config.FORCE_ARCHIVE_AFTER_DAYS} days",)
+        )
+        total = c1.rowcount + c2.rowcount
+        if total > 0:
+            logger.info("Auto-Archiv: %d Faxe archiviert", total)
 
 
 def auto_delete():

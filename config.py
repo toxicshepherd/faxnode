@@ -48,5 +48,8 @@ FAX_CATEGORIES = {
     "sonstiges": "Sonstiges",
 }
 
-# Thumbnail-Verzeichnis
-THUMBNAIL_DIR = str(BASE_DIR / "data" / "thumbnails")
+# Thumbnail-Verzeichnis (unter static/ fuer direktes Serving ohne API-Call)
+THUMBNAIL_DIR = str(BASE_DIR / "static" / "thumbnails")
+
+# Auto-Archiv: alle Faxe nach X Tagen unabhaengig vom Status
+FORCE_ARCHIVE_AFTER_DAYS = int(os.environ.get("FORCE_ARCHIVE_AFTER_DAYS", "30"))

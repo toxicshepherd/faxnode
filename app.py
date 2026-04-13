@@ -339,8 +339,7 @@ def fax_list():
     per_page = 30
     offset = (page - 1) * per_page
     faxes = db.get_faxes(status=status_filter, category=category_filter, archived=0, search=search, limit=per_page, offset=offset)
-    counts = db.get_fax_count_by_status(archived=0)
-    cat_counts = db.get_fax_count_by_category(archived=0)
+    counts, cat_counts = db.get_fax_counts(archived=0)
     total = sum(counts.values())
     unread = counts.get("neu", 0)
     # Gesamtzahl fuer Pagination berechnen
