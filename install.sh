@@ -21,10 +21,17 @@ sudo apt-get install -y -qq \
     tesseract-ocr tesseract-ocr-deu \
     poppler-utils \
     libcups2-dev \
+    cups \
     cifs-utils \
     smbclient \
     git > /dev/null
 echo "      Fertig."
+
+# CUPS konfigurieren (Netzwerkdrucker-Erkennung + Fernzugriff)
+echo "      CUPS konfigurieren..."
+sudo usermod -aG lpadmin "$USER" 2>/dev/null || true
+sudo systemctl enable cups -q 2>/dev/null || true
+sudo systemctl start cups 2>/dev/null || true
 
 # 2. Repo klonen
 echo "[2/6] FaxNode herunterladen..."

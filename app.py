@@ -232,8 +232,62 @@ def api_setup_mount_nas():
         return jsonify({"ok": False, "error": str(e)})
 
 
+@app.route("/api/setup/discover-printers", methods=["POST"])
+def api_setup_discover_printers():
+    """Netzwerkdrucker via CUPS/lpinfo suchen."""
+    try:
+        r = subprocess.run(
+            ["sudo", SETUP_HELPER, "discover-printers"],
+            capture_output=True, text=True, timeout=20
+        )
+        printers = []
+        seen = set()
+        for line in r.stdout.splitlines():
+            if line.strip() == "---END---":
+                break
+            parts = line.strip().split(" ", 1)
+            if len(parts) == 2:
+                uri = parts[1].strip()
+                if uri in seen:
+                    continue
+                seen.add(uri)
+                # Druckernamen aus URI ableiten
+                name = uri.split("/")[-1] if "/" in uri else uri
+                # Bereinigen
+                name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+                printers.append({"uri": uri, "name": name})
+        return jsonify({"ok": True, "printers": printers})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "printers": [], "error": "Suche dauert zu lange — evtl. keine Netzwerkdrucker erreichbar"})
+    except Exception as e:
+        return jsonify({"ok": False, "printers": [], "error": str(e)})
+
+
+@app.route("/api/setup/add-printer", methods=["POST"])
+def api_setup_add_printer():
+    """Drucker in CUPS einrichten."""
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    uri = data.get("uri", "").strip()
+    if not name or not uri:
+        return jsonify({"ok": False, "error": "Name und URI erforderlich"})
+    # Name sanitizen
+    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+    try:
+        r = subprocess.run(
+            ["sudo", SETUP_HELPER, "add-printer", name, uri, "everywhere"],
+            capture_output=True, text=True, timeout=15
+        )
+        if r.returncode != 0:
+            return jsonify({"ok": False, "error": r.stderr.strip() or "Drucker konnte nicht hinzugefuegt werden"})
+        return jsonify({"ok": True, "name": name})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/setup/test-printers")
 def api_setup_test_printers():
+    """Bereits in CUPS eingerichtete Drucker auflisten."""
     try:
         from printer import get_printers
         printers = get_printers()

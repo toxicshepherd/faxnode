@@ -196,11 +196,12 @@
     <!-- Step 5: Drucker (optional) + Fertig -->
     <div class="step" id="s5">
         <div class="card">
-            <h2>Drucker (optional)</h2>
-            <p class="desc">Erkannte CUPS-Drucker. Kann spaeter in den Einstellungen konfiguriert werden.</p>
-            <button class="btn" onclick="testPrinters()" id="printer-btn">Drucker suchen</button>
-            <div id="printer-list" style="margin-top:0.75rem;"></div>
+            <h2>Drucker einrichten</h2>
+            <p class="desc">Netzwerkdrucker werden automatisch erkannt. Waehle die Drucker aus, die FaxNode nutzen soll.</p>
+            <button class="btn" onclick="discoverPrinters()" id="discover-btn">Drucker im Netzwerk suchen</button>
+            <div id="discovered-printers" style="margin-top:0.75rem;"></div>
             <div class="msg" id="printer-msg"></div>
+            <div id="added-printers" style="margin-top:1rem;"></div>
         </div>
         <div class="card">
             <h2>Einrichtung abschliessen</h2>
@@ -403,22 +404,73 @@ function mountNas() {
 }
 
 // Step 5: Drucker
-function testPrinters() {
-    setBtnLoading('printer-btn', true, 'Suche...');
-    document.getElementById('printer-list').innerHTML = '';
-    fetch('/api/setup/test-printers').then(function(r) { return r.json(); }).then(function(d) {
-        setBtnLoading('printer-btn', false, 'Drucker suchen');
-        if (d.ok && d.printers.length > 0) {
-            var list = document.getElementById('printer-list');
-            d.printers.forEach(function(name) {
+var _addedPrinters = [];
+
+function discoverPrinters() {
+    setBtnLoading('discover-btn', true, 'Suche im Netzwerk...');
+    document.getElementById('discovered-printers').innerHTML = '';
+    document.getElementById('printer-msg').className = 'msg';
+    fetch('/api/setup/discover-printers', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            setBtnLoading('discover-btn', false, 'Drucker im Netzwerk suchen');
+            if (!d.ok || d.printers.length === 0) {
+                setMsg('printer-msg', 'info', 'Keine Netzwerkdrucker gefunden. Kann spaeter in den Einstellungen oder ueber CUPS (Port 631) eingerichtet werden.');
+                return;
+            }
+            var list = document.getElementById('discovered-printers');
+            d.printers.forEach(function(p) {
                 var div = document.createElement('div');
-                div.className = 'printer-item';
-                div.textContent = name;
+                div.className = 'share-item';
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                var info = document.createElement('div');
+                info.innerHTML = '<div style="font-weight:500;">' + p.name + '</div><div style="font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono);">' + p.uri + '</div>';
+                var btn = document.createElement('button');
+                btn.className = 'btn';
+                btn.style.flexShrink = '0';
+                btn.textContent = 'Hinzufuegen';
+                btn.onclick = function(e) {
+                    e.stopPropagation();
+                    addPrinter(p.name, p.uri, btn);
+                };
+                div.appendChild(info);
+                div.appendChild(btn);
                 list.appendChild(div);
             });
+        });
+}
+
+function addPrinter(name, uri, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>';
+    fetch('/api/setup/add-printer', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, uri: uri})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            btn.textContent = 'Eingerichtet';
+            btn.style.color = 'var(--accent)';
+            btn.style.borderColor = 'var(--accent)';
+            _addedPrinters.push(d.name);
+            updateAddedList();
         } else {
-            setMsg('printer-msg', 'info', 'Keine CUPS-Drucker gefunden. Kann spaeter eingerichtet werden.');
+            btn.textContent = 'Fehler';
+            btn.style.color = 'var(--danger)';
+            btn.disabled = false;
+            setMsg('printer-msg', 'err', d.error);
         }
+    });
+}
+
+function updateAddedList() {
+    var el = document.getElementById('added-printers');
+    if (_addedPrinters.length === 0) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div style="color:var(--accent);font-size:0.85rem;margin-bottom:0.5rem;">' + _addedPrinters.length + ' Drucker eingerichtet:</div>';
+    _addedPrinters.forEach(function(n) {
+        el.innerHTML += '<div class="printer-item">' + n + '</div>';
     });
 }
 
