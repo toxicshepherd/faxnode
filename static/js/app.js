@@ -152,11 +152,17 @@ function toggleAddressForm() {
 function saveAddress(e) {
     e.preventDefault();
     var form = e.target;
+    var autoPrintEl = form.querySelector('[name=auto_print]');
+    var printerEl = form.querySelector('[name=printer_name]');
+    var copiesEl = form.querySelector('[name=print_copies]');
     var data = {
         phone_number: form.querySelector('[name=phone_number]').value.trim(),
         name: form.querySelector('[name=name]').value.trim(),
         default_category: form.querySelector('[name=default_category]').value,
-        notes: form.querySelector('[name=notes]').value.trim()
+        notes: form.querySelector('[name=notes]').value.trim(),
+        auto_print: autoPrintEl ? autoPrintEl.checked : false,
+        printer_name: printerEl ? printerEl.value : '',
+        print_copies: copiesEl ? parseInt(copiesEl.value) || 1 : 1
     };
     fetch('/api/adressbuch', {
         method: 'POST',

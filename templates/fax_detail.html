@@ -53,6 +53,51 @@
             <div class="meta-row">
                 <button class="btn btn-sm" onclick="printFax({{ fax.id }})">Drucken</button>
             </div>
+
+            {% if not fax.sender_name %}
+            <div class="meta-row" style="margin-top:0.5rem; border-top:1px solid var(--border); padding-top:0.75rem;">
+                <button class="btn btn-sm" onclick="toggleAddToAddressBook()" id="add-address-btn">Zum Adressbuch hinzufuegen</button>
+            </div>
+            <div id="add-address-form" style="display:none; margin-top:0.75rem;">
+                <div class="form-row">
+                    <label>Nummer</label>
+                    <input type="text" id="addr-phone" value="{{ fax.phone_number }}" readonly style="opacity:0.7;">
+                </div>
+                <div class="form-row">
+                    <label>Name</label>
+                    <input type="text" id="addr-name" placeholder="z.B. Arztpraxis Muster" required>
+                </div>
+                <div class="form-row">
+                    <label>Standard-Kategorie</label>
+                    <select id="addr-category">
+                        {% for key, label in categories.items() %}
+                        <option value="{{ key }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Notizen</label>
+                    <input type="text" id="addr-notes" placeholder="Optional">
+                </div>
+                <div class="form-row" style="margin-top:0.5rem;">
+                    <label><input type="checkbox" id="addr-autoprint"> Auto-Druck aktivieren</label>
+                </div>
+                <div id="addr-print-opts" style="display:none;">
+                    <div class="form-row">
+                        <label>Drucker</label>
+                        <select id="addr-printer"><option value="">Laden...</option></select>
+                    </div>
+                    <div class="form-row">
+                        <label>Kopien</label>
+                        <input type="number" id="addr-copies" value="1" min="1" max="10">
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top:0.75rem;">
+                    <button class="btn btn-sm" onclick="saveAddressFromDetail()">Speichern</button>
+                    <button class="btn btn-sm btn-ghost" onclick="toggleAddToAddressBook()">Abbrechen</button>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         {% if fax.ocr_text %}
@@ -86,4 +131,57 @@
         </div>
     </div>
 </div>
+
+<script>
+function toggleAddToAddressBook() {
+    var form = document.getElementById('add-address-form');
+    var btn = document.getElementById('add-address-btn');
+    var show = form.style.display === 'none';
+    form.style.display = show ? 'block' : 'none';
+    btn.style.display = show ? 'none' : '';
+    if (show) {
+        document.getElementById('addr-name').focus();
+        loadPrintersForAddress();
+    }
+}
+
+function loadPrintersForAddress() {
+    fetch('/api/drucker').then(function(r) { return r.json(); }).then(function(printers) {
+        var sel = document.getElementById('addr-printer');
+        sel.innerHTML = '';
+        var names = Object.keys(printers);
+        if (names.length === 0) {
+            sel.innerHTML = '<option value="">Keine Drucker</option>';
+        } else {
+            names.forEach(function(n) {
+                sel.innerHTML += '<option value="' + n + '">' + n + '</option>';
+            });
+        }
+    });
+}
+
+document.getElementById('addr-autoprint')?.addEventListener('change', function() {
+    document.getElementById('addr-print-opts').style.display = this.checked ? 'block' : 'none';
+});
+
+function saveAddressFromDetail() {
+    var data = {
+        phone_number: document.getElementById('addr-phone').value,
+        name: document.getElementById('addr-name').value.trim(),
+        default_category: document.getElementById('addr-category').value,
+        notes: document.getElementById('addr-notes').value.trim(),
+        auto_print: document.getElementById('addr-autoprint').checked,
+        printer_name: document.getElementById('addr-printer').value,
+        print_copies: parseInt(document.getElementById('addr-copies').value) || 1
+    };
+    if (!data.name) { alert('Name ist erforderlich'); return; }
+    fetch('/api/adressbuch', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) location.reload();
+    });
+}
+</script>
 {% endblock %}

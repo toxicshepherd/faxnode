@@ -127,6 +127,12 @@ def _migrate(conn):
     addr_cols = {r[1] for r in conn.execute("PRAGMA table_info(address_book)").fetchall()}
     if "default_category" not in addr_cols:
         conn.execute("ALTER TABLE address_book ADD COLUMN default_category TEXT NOT NULL DEFAULT 'sonstiges'")
+    if "auto_print" not in addr_cols:
+        conn.execute("ALTER TABLE address_book ADD COLUMN auto_print INTEGER DEFAULT 0")
+    if "printer_name" not in addr_cols:
+        conn.execute("ALTER TABLE address_book ADD COLUMN printer_name TEXT")
+    if "print_copies" not in addr_cols:
+        conn.execute("ALTER TABLE address_book ADD COLUMN print_copies INTEGER DEFAULT 1")
 
 
 # --- Fax Queries ---
@@ -264,15 +270,17 @@ def get_address_entry(phone_number):
         ).fetchone()
 
 
-def upsert_address(phone_number, name, default_category="sonstiges", notes=None):
+def upsert_address(phone_number, name, default_category="sonstiges", notes=None,
+                   auto_print=0, printer_name=None, print_copies=1):
     """Adressbuch-Eintrag anlegen oder aktualisieren."""
     with db_connection() as conn:
         conn.execute(
-            """INSERT INTO address_book (phone_number, name, default_category, notes)
-               VALUES (?, ?, ?, ?)
+            """INSERT INTO address_book (phone_number, name, default_category, notes, auto_print, printer_name, print_copies)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(phone_number)
-               DO UPDATE SET name = ?, default_category = ?, notes = ?, updated_at = CURRENT_TIMESTAMP""",
-            (phone_number, name, default_category, notes, name, default_category, notes)
+               DO UPDATE SET name = ?, default_category = ?, notes = ?, auto_print = ?, printer_name = ?, print_copies = ?, updated_at = CURRENT_TIMESTAMP""",
+            (phone_number, name, default_category, notes, auto_print, printer_name, print_copies,
+             name, default_category, notes, auto_print, printer_name, print_copies)
         )
 
 
@@ -296,8 +304,15 @@ def get_print_rules():
 
 
 def get_print_rules_for_number(phone_number):
-    """Druckregeln fuer eine bestimmte Nummer."""
+    """Druckregeln fuer eine bestimmte Nummer (aus Adressbuch)."""
     with db_connection() as conn:
+        entry = conn.execute(
+            "SELECT * FROM address_book WHERE phone_number = ? AND auto_print = 1 AND printer_name IS NOT NULL",
+            (phone_number,)
+        ).fetchone()
+        if entry:
+            return [entry]
+        # Fallback: alte print_rules Tabelle
         return conn.execute(
             "SELECT * FROM print_rules WHERE phone_number = ? AND enabled = 1",
             (phone_number,)
@@ -371,10 +386,13 @@ def get_archive_count(search=None):
 
 
 def get_failed_ocr_fax_ids():
-    """IDs von Faxen mit fehlgeschlagenem oder ausstehendem OCR."""
+    """IDs von Faxen mit fehlgeschlagenem/ausstehendem OCR oder fehlendem Thumbnail."""
     with db_connection() as conn:
         rows = conn.execute(
-            "SELECT id FROM faxes WHERE ocr_done IN (0, -1) ORDER BY id ASC"
+            """SELECT id FROM faxes
+               WHERE ocr_done IN (0, -1)
+               OR (ocr_done = 1 AND thumbnail_path IS NULL)
+               ORDER BY id ASC"""
         ).fetchall()
         return [row["id"] for row in rows]
 

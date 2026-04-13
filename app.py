@@ -398,7 +398,13 @@ def archive():
 @app.route("/adressbuch")
 def address_book():
     entries = db.get_address_book()
-    return render_template("address_book.html", entries=entries)
+    printers = {}
+    try:
+        from printer import get_printers
+        printers = get_printers()
+    except Exception:
+        pass
+    return render_template("address_book.html", entries=entries, printers=printers, categories=config.FAX_CATEGORIES)
 
 
 @app.route("/einstellungen")
@@ -548,9 +554,12 @@ def api_upsert_address():
     name = data.get("name", "").strip()
     default_category = data.get("default_category", "sonstiges")
     notes = data.get("notes", "").strip()
+    auto_print = 1 if data.get("auto_print") else 0
+    printer_name = data.get("printer_name", "").strip() or None
+    print_copies = int(data.get("print_copies", 1))
     if not phone or not name:
         return jsonify({"error": "Nummer und Name sind Pflichtfelder"}), 400
-    db.upsert_address(phone, name, default_category, notes)
+    db.upsert_address(phone, name, default_category, notes, auto_print, printer_name, print_copies)
     return jsonify({"ok": True})
 
 

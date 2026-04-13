@@ -19,38 +19,46 @@ def _ocr_worker():
         fax_id = ocr_queue.get()
         try:
             fax = db.get_fax(fax_id)
-            if not fax or fax["ocr_done"] != 0:
+            if not fax:
+                continue
+
+            # Bereits fertig UND hat Thumbnail → nichts zu tun
+            if fax["ocr_done"] == 1 and fax["thumbnail_path"]:
                 continue
 
             file_path = fax["file_path"]
-            logger.info("OCR starten: Fax %d (%s)", fax_id, fax["filename"])
-
-            # PDF -> Bilder -> Text
             from pdf2image import convert_from_path
             import pytesseract
 
             images = convert_from_path(file_path, dpi=150)
-            texts = []
-            for i, image in enumerate(images):
-                text = pytesseract.image_to_string(image, lang=config.OCR_LANGUAGE)
-                texts.append(text.strip())
-                logger.debug("OCR Seite %d/%d fertig", i + 1, len(images))
 
-            full_text = "\n\n".join(texts)
-            page_count = len(images)
+            # Thumbnail generieren falls fehlend
+            if not fax["thumbnail_path"]:
+                thumbnail_path = _generate_thumbnail(fax_id, images[0])
+                if thumbnail_path:
+                    db.update_fax_thumbnail(fax_id, thumbnail_path)
 
-            # Thumbnail generieren (erste Seite, 200px breit)
-            thumbnail_path = _generate_thumbnail(fax_id, images[0])
-            if thumbnail_path:
-                db.update_fax_thumbnail(fax_id, thumbnail_path)
+            # OCR nur wenn noch nicht erledigt
+            if fax["ocr_done"] != 1:
+                logger.info("OCR starten: Fax %d (%s)", fax_id, fax["filename"])
+                texts = []
+                for i, image in enumerate(images):
+                    text = pytesseract.image_to_string(image, lang=config.OCR_LANGUAGE)
+                    texts.append(text.strip())
 
-            # DB Update
-            db.update_fax_ocr(fax_id, full_text, ocr_done=1)
-            with db.db_connection() as conn:
-                conn.execute(
-                    "UPDATE faxes SET page_count = ? WHERE id = ?",
-                    (page_count, fax_id)
-                )
+                full_text = "\n\n".join(texts)
+                page_count = len(images)
+
+                db.update_fax_ocr(fax_id, full_text, ocr_done=1)
+                with db.db_connection() as conn:
+                    conn.execute(
+                        "UPDATE faxes SET page_count = ? WHERE id = ?",
+                        (page_count, fax_id)
+                    )
+            else:
+                logger.info("Thumbnail nachgeneriert: Fax %d", fax_id)
+                page_count = fax["page_count"] or len(images)
+                full_text = fax["ocr_text"] or ""
 
             logger.info("OCR fertig: Fax %d (%d Seiten, %d Zeichen)",
                         fax_id, page_count, len(full_text))
@@ -91,15 +99,15 @@ def _generate_thumbnail(fax_id, image):
 
 
 def requeue_failed():
-    """Fehlgeschlagene/ausstehende OCR-Jobs erneut in die Queue stellen."""
+    """Fehlgeschlagene/ausstehende OCR-Jobs und fehlende Thumbnails erneut einreihen."""
+    # Fehlgeschlagene OCR zuruecksetzen
+    with db.db_connection() as conn:
+        conn.execute("UPDATE faxes SET ocr_done = 0 WHERE ocr_done = -1")
     fax_ids = db.get_failed_ocr_fax_ids()
     if fax_ids:
-        # Zuerst alle auf ocr_done=0 zuruecksetzen
-        with db.db_connection() as conn:
-            conn.execute("UPDATE faxes SET ocr_done = 0 WHERE ocr_done = -1")
         for fax_id in fax_ids:
             ocr_queue.put(fax_id)
-        logger.info("OCR Re-Queue: %d Faxe erneut eingereiht", len(fax_ids))
+        logger.info("OCR Re-Queue: %d Faxe eingereiht (OCR + fehlende Thumbnails)", len(fax_ids))
 
 
 OCR_WORKERS = int(os.environ.get("OCR_WORKERS", "2"))

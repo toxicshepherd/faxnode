@@ -8,8 +8,9 @@
 </div>
 
 <div id="address-form-container" class="card form-card" style="display:none;">
-    <h3>Neuer Eintrag</h3>
+    <h3 id="address-form-title">Neuer Eintrag</h3>
     <form id="address-form" onsubmit="saveAddress(event)">
+        <input type="hidden" id="edit-id" value="">
         <div class="form-row">
             <label>Faxnummer</label>
             <input type="text" name="phone_number" placeholder="z.B. 05721924822" required>
@@ -21,16 +22,35 @@
         <div class="form-row">
             <label>Standard-Kategorie</label>
             <select name="default_category">
-                <option value="sonstiges">Sonstiges</option>
-                <option value="rezept">Rezept</option>
-                <option value="bestellung">Bestellung</option>
-                <option value="lieferschein">Lieferschein</option>
-                <option value="rueckruf">Rueckruf</option>
+                {% for key, label in categories.items() %}
+                <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
             </select>
         </div>
         <div class="form-row">
             <label>Notizen</label>
             <input type="text" name="notes" placeholder="Optional">
+        </div>
+        <div class="form-row" style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+            <label><input type="checkbox" name="auto_print" id="form-autoprint" onchange="togglePrintOpts()"> Auto-Druck: Faxe von dieser Nummer automatisch drucken</label>
+        </div>
+        <div id="form-print-opts" style="display:none;">
+            <div class="form-row">
+                <label>Drucker</label>
+                <select name="printer_name">
+                    <option value="">Drucker waehlen...</option>
+                    {% for name, info in printers.items() %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
+                    {% if not printers %}
+                    <option disabled>Keine Drucker eingerichtet</option>
+                    {% endif %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Kopien</label>
+                <input type="number" name="print_copies" value="1" min="1" max="10">
+            </div>
         </div>
         <div class="form-actions">
             <button type="submit" class="btn btn-sm">Speichern</button>
@@ -46,6 +66,7 @@
                 <th>Name</th>
                 <th>Faxnummer</th>
                 <th>Kategorie</th>
+                <th>Auto-Druck</th>
                 <th>Notizen</th>
                 <th></th>
             </tr>
@@ -55,15 +76,49 @@
             <tr>
                 <td>{{ entry.name }}</td>
                 <td class="mono-sm">{{ entry.phone_number }}</td>
-                <td><span class="cat-badge cat-{{ entry.default_category }}">{{ entry.default_category|capitalize }}</span></td>
+                <td><span class="cat-badge cat-{{ entry.default_category }}">{{ categories.get(entry.default_category, entry.default_category) }}</span></td>
+                <td>
+                    {% if entry.auto_print and entry.printer_name %}
+                    <span class="mono-sm" style="color:var(--accent);">{{ entry.printer_name }} ({{ entry.print_copies or 1 }}x)</span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
                 <td class="text-muted">{{ entry.notes or '' }}</td>
-                <td><button class="btn btn-sm btn-ghost btn-danger" onclick="deleteAddress({{ entry.id }})">Loeschen</button></td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-sm btn-ghost" onclick="editAddress({{ entry.id }}, '{{ entry.phone_number }}', '{{ entry.name }}', '{{ entry.default_category }}', '{{ entry.notes or '' }}', {{ entry.auto_print or 0 }}, '{{ entry.printer_name or '' }}', {{ entry.print_copies or 1 }})">Bearbeiten</button>
+                    <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteAddress({{ entry.id }})">Loeschen</button>
+                </td>
             </tr>
             {% endfor %}
             {% if not entries %}
-            <tr><td colspan="5" class="text-muted">Noch keine Eintraege</td></tr>
+            <tr><td colspan="6" class="text-muted">Noch keine Eintraege</td></tr>
             {% endif %}
         </tbody>
     </table>
 </div>
+
+<script>
+function togglePrintOpts() {
+    var cb = document.getElementById('form-autoprint');
+    document.getElementById('form-print-opts').style.display = cb.checked ? 'block' : 'none';
+}
+
+function editAddress(id, phone, name, category, notes, autoPrint, printer, copies) {
+    var c = document.getElementById('address-form-container');
+    c.style.display = 'block';
+    document.getElementById('address-form-title').textContent = 'Eintrag bearbeiten';
+    var form = document.getElementById('address-form');
+    form.querySelector('[name=phone_number]').value = phone;
+    form.querySelector('[name=name]').value = name;
+    form.querySelector('[name=default_category]').value = category;
+    form.querySelector('[name=notes]').value = notes;
+    var cb = document.getElementById('form-autoprint');
+    cb.checked = !!autoPrint;
+    togglePrintOpts();
+    if (printer) form.querySelector('[name=printer_name]').value = printer;
+    form.querySelector('[name=print_copies]').value = copies;
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+</script>
 {% endblock %}
