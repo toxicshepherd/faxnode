@@ -6,6 +6,7 @@ set -e
 REPO="https://github.com/toxicshepherd/faxnode.git"
 INSTALL_DIR="/opt/faxnode"
 USER=$(whoami)
+PORT=9741
 
 echo ""
 echo "  ╔═══════════════════════════╗"
@@ -91,7 +92,7 @@ Type=simple
 User=$USER
 Group=$USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:5000 --certfile $INSTALL_DIR/certs/server.crt --keyfile $INSTALL_DIR/certs/server.key --timeout 120 wsgi:app
+ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:$PORT --certfile $INSTALL_DIR/certs/server.crt --keyfile $INSTALL_DIR/certs/server.key --timeout 120 wsgi:app
 Restart=on-failure
 RestartSec=10
 
@@ -111,13 +112,10 @@ echo "  ════════════════════════
 echo "  FaxNode laeuft!"
 echo ""
 echo "  Oeffne im Browser:"
-echo "  https://$IP:5000"
+echo "  https://$IP:$PORT"
 echo ""
-echo "  (Beim ersten Zugriff vom Browser:"
-echo "   Zertifikatswarnung akzeptieren)"
-echo ""
-echo "  Windows-Clients: FaxNode.exe starten"
-echo "  → Zertifikat wird automatisch"
-echo "    installiert."
+echo "  Windows-Clients: FaxNode-Setup.exe"
+echo "  installieren und starten."
+echo "  Der Server wird automatisch gefunden."
 echo "  ══════════════════════════════════════"
 echo ""

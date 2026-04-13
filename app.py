@@ -3,6 +3,7 @@ import json
 import os
 import queue
 import re
+import socket
 import subprocess
 import threading
 from pathlib import Path
@@ -785,13 +786,39 @@ def _save_env_settings():
     env_path.write_text("\n".join(lines) + "\n")
 
 
+# --- UDP Discovery ---
+
+def _discovery_responder():
+    """UDP-Discovery: Antwortet auf Broadcast-Anfragen von Clients."""
+    import logging
+    logger = logging.getLogger(__name__)
+    discovery_port = config.PORT + 1
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("0.0.0.0", discovery_port))
+        logger.info("UDP-Discovery lauscht auf Port %d", discovery_port)
+        while True:
+            data, addr = sock.recvfrom(1024)
+            if data == b"FAXNODE_DISCOVER":
+                response = json.dumps({
+                    "service": "faxnode",
+                    "port": config.PORT,
+                    "hostname": socket.gethostname(),
+                    "version": "1.1",
+                }, ensure_ascii=False).encode()
+                sock.sendto(response, addr)
+    except Exception as e:
+        logger.error("UDP-Discovery Fehler: %s", e)
+
+
 # --- Startup ---
 
 _background_started = False
 
 
 def start_background_services():
-    """Hintergrund-Services starten (Watcher, OCR, Scheduler)."""
+    """Hintergrund-Services starten (Watcher, OCR, Scheduler, Discovery)."""
     global _background_started
     if _background_started:
         return
@@ -805,6 +832,10 @@ def start_background_services():
     start_ocr_worker(broadcast)
     start_scheduler()
 
+
+# Discovery immer starten (auch vor Setup-Wizard, damit Clients den Server finden)
+_discovery_thread = threading.Thread(target=_discovery_responder, daemon=True, name="udp-discovery")
+_discovery_thread.start()
 
 with app.app_context():
     db.init_db()

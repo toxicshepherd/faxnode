@@ -18,15 +18,21 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: pip install pywebview pyinstaller
 
-      - name: Build exe
+      - name: Build exe with PyInstaller
         working-directory: client
         run: pyinstaller --onefile --noconsole --name "FaxNode" --hidden-import clr --hidden-import webview faxnode_client.py
+
+      - name: Build installer with Inno Setup
+        working-directory: client
+        run: iscc installer.iss
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: client/dist/FaxNode.exe
+          files: |
+            client/output/FaxNode-Setup.exe
+            client/dist/FaxNode.exe
           generate_release_notes: true

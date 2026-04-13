@@ -15,7 +15,7 @@ DATABASE = str(BASE_DIR / "data" / "faxnode.db")
 
 # Server
 HOST = os.environ.get("HOST", "0.0.0.0")
-PORT = int(os.environ.get("PORT", "5000"))
+PORT = int(os.environ.get("PORT", "9741"))
 SECRET_KEY = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 # FritzBox Dateiname: DD.MM.YY_HH.MM_Telefax.RUFNUMMER.pdf

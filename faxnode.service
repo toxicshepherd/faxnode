@@ -11,7 +11,7 @@ User=pi
 Group=pi
 WorkingDirectory=/opt/faxnode
 EnvironmentFile=-/opt/faxnode/.env
-ExecStart=/opt/faxnode/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:5000 --certfile /opt/faxnode/certs/server.crt --keyfile /opt/faxnode/certs/server.key --timeout 120 wsgi:app
+ExecStart=/opt/faxnode/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:9741 --certfile /opt/faxnode/certs/server.crt --keyfile /opt/faxnode/certs/server.key --timeout 120 wsgi:app
 Restart=on-failure
 RestartSec=10
 

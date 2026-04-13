@@ -9,4 +9,5 @@ data/
 certs/
 client/dist/
 client/build/
+client/output/
 client/*.spec
