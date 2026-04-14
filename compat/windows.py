@@ -53,9 +53,20 @@ class WindowsPrinterService(PrinterService):
 
     def add_printer(self, name: str, uri: str) -> tuple[bool, str]:
         name = re.sub(r"[^a-zA-Z0-9_\- ]", "_", name)
-        # URI-Validierung: nur erlaubte Protokoll-URIs (verhindert PowerShell-Injection)
-        if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://[\w.\-:/]+$", uri):
-            return False, f"Ungueltige Drucker-URI: {uri}"
+
+        # Bereits installierter Windows-Drucker (kein Protokoll-URI)?
+        # discover_printers() liefert den Druckernamen als URI.
+        if "://" not in uri:
+            printers = self.get_printers()
+            if uri in printers or name in printers:
+                return True, name
+            # Unbekannter Drucker ohne URI — Name sanitizen
+            uri = re.sub(r"[^a-zA-Z0-9_\- ().]", "_", uri)
+        else:
+            # Protokoll-URI: strikt validieren (verhindert PowerShell-Injection)
+            if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://[\w.\-:/]+$", uri):
+                return False, f"Ungueltige Drucker-URI: {uri}"
+
         try:
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
