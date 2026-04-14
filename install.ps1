@@ -179,20 +179,75 @@ if (Test-Path "$popplerDir\Library\bin\pdfinfo.exe") {
 [System.Environment]::SetEnvironmentVariable("POPPLER_PATH", "$popplerDir\Library\bin", "Machine")
 $env:POPPLER_PATH = "$popplerDir\Library\bin"
 
-# --- 5. SumatraPDF portable ---
+# --- 5. SumatraPDF (PDF-Drucker) ---
 
-Write-Step 5 $TOTAL_STEPS "SumatraPDF (PDF-Drucker) herunterladen..."
+Write-Step 5 $TOTAL_STEPS "SumatraPDF (PDF-Drucker) pruefen..."
 $sumatraPath = "$TOOLS_DIR\SumatraPDF.exe"
-if (Test-Path $sumatraPath) {
-    Write-Host "         SumatraPDF vorhanden." -ForegroundColor Green
-} else {
-    $sumatraUrl = "https://www.sumatrapdfreader.com/dl/rel/3.5.2/SumatraPDF-3.5.2-64.exe"
-    Write-Host "         Lade SumatraPDF herunter..."
-    Invoke-WebRequest -Uri $sumatraUrl -OutFile $sumatraPath -UseBasicParsing
-    Write-Host "         SumatraPDF installiert." -ForegroundColor Green
+# Auch in Program Files suchen (falls via winget installiert)
+$sumatraSearchPaths = @(
+    $sumatraPath,
+    "${env:ProgramFiles}\SumatraPDF\SumatraPDF.exe",
+    "${env:LocalAppData}\SumatraPDF\SumatraPDF.exe"
+)
+$sumatraFound = $false
+foreach ($p in $sumatraSearchPaths) {
+    if (Test-Path $p) {
+        $sumatraPath = $p
+        $sumatraFound = $true
+        break
+    }
 }
-[System.Environment]::SetEnvironmentVariable("SUMATRA_PATH", $sumatraPath, "Machine")
-$env:SUMATRA_PATH = $sumatraPath
+if ($sumatraFound) {
+    Write-Host "         SumatraPDF vorhanden: $sumatraPath" -ForegroundColor Green
+} else {
+    Write-Host "         SumatraPDF nicht gefunden. Wird installiert..."
+    $installed = $false
+    if (Test-Command "winget") {
+        Write-Host "         Installiere via winget..."
+        winget install SumatraPDF.SumatraPDF --silent --accept-package-agreements --accept-source-agreements 2>$null
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                     [System.Environment]::GetEnvironmentVariable("Path", "User")
+        # Installierten Pfad finden
+        foreach ($p in $sumatraSearchPaths) {
+            if (Test-Path $p) {
+                $sumatraPath = $p
+                $installed = $true
+                break
+            }
+        }
+    }
+    if (-not $installed) {
+        # Fallback: Portable EXE von GitHub Releases herunterladen
+        $dlUrls = @(
+            "https://github.com/nickelc/sumatrapdf-releases/releases/download/3.6.1/SumatraPDF-3.6.1-64.exe",
+            "https://github.com/nickelc/sumatrapdf-binaries/releases/download/3.5.2/SumatraPDF-3.5.2-64.exe"
+        )
+        $dlSuccess = $false
+        foreach ($url in $dlUrls) {
+            try {
+                Invoke-WebRequest -Uri $url -OutFile "$TOOLS_DIR\SumatraPDF.exe" -UseBasicParsing -ErrorAction Stop
+                $sumatraPath = "$TOOLS_DIR\SumatraPDF.exe"
+                $dlSuccess = $true
+                break
+            } catch {
+                continue
+            }
+        }
+        if (-not $dlSuccess) {
+            Write-Host "         WARNUNG: SumatraPDF konnte nicht installiert werden." -ForegroundColor Yellow
+            Write-Host "         Bitte manuell installieren: winget install SumatraPDF.SumatraPDF" -ForegroundColor Yellow
+            Write-Host "         Auto-Druck ist ohne SumatraPDF nicht verfuegbar." -ForegroundColor Yellow
+            $sumatraPath = ""
+        }
+    }
+    if ($sumatraPath) {
+        Write-Host "         SumatraPDF installiert: $sumatraPath" -ForegroundColor Green
+    }
+}
+if ($sumatraPath) {
+    [System.Environment]::SetEnvironmentVariable("SUMATRA_PATH", $sumatraPath, "Machine")
+    $env:SUMATRA_PATH = $sumatraPath
+}
 
 # --- 6. NSSM (Service Manager) ---
 
