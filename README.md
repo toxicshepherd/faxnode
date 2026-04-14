@@ -52,23 +52,30 @@ FaxNode ueberwacht das NAS-Verzeichnis deiner FritzBox, erkennt neue Faxe automa
 
 ## Screenshots
 
-<details>
-<summary>Faxliste (Dark Theme)</summary>
-<br>
-Grid-Layout mit Status-Buttons, Kategorie-Badges, Vorschau-Text und Aktionen.
-</details>
+### Faxliste
+Grid-Layout mit Status-Buttons, Kategorie-Badges, OCR-Vorschautext und Aktionen.
 
-<details>
-<summary>Fax-Detailansicht</summary>
-<br>
-PDF-Vorschau, OCR-Text, Status, Kategorie, Druck-Status, Notizen.
-</details>
+![Faxliste](docs/screenshots/faxliste.png)
 
-<details>
-<summary>Setup-Wizard</summary>
-<br>
-Schritt-fuer-Schritt-Einrichtung: NAS finden, SMB-Zugangsdaten, Fax-Ordner, Drucker.
-</details>
+### Fax-Detailansicht
+PDF-Viewer, erkannter OCR-Text, Status, Kategorie, Druck-Tracking und Notizen.
+
+![Detailansicht](docs/screenshots/detailansicht.png)
+
+### Statistik
+Fax-Aufkommen pro Woche, Top-Absender, Verteilung nach Kategorie.
+
+![Statistik](docs/screenshots/statistik.png)
+
+### Adressbuch
+Absender benennen, Standard-Kategorien und Auto-Druck-Regeln festlegen.
+
+![Adressbuch](docs/screenshots/adressbuch.png)
+
+### Einstellungen
+Kategorien, Drucker, Archivierung, Standarddrucker — alles konfigurierbar.
+
+![Einstellungen](docs/screenshots/einstellungen.png)
 
 ---
 
