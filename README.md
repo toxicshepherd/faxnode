@@ -287,10 +287,33 @@ FaxNode bietet eine REST-API fuer alle Operationen:
 
 ---
 
-## Voraussetzungen
+## Systemanforderungen
+
+### Minimum vs. Empfohlen
+
+|  | Minimum | Empfohlen |
+|---|---|---|
+| **RAM** | 512 MB (mit Swap) | 1 GB+ |
+| **CPU** | 1 Core (ARMv7/x86_64) | 2+ Cores |
+| **Disk** | 500 MB frei | 2 GB+ |
+| **OS** | Debian 11 / Windows 10 | Debian 12 / Ubuntu 22.04 / Windows 11 |
+| **Netzwerk** | SMB-Zugang zur FritzBox | Gigabit-LAN |
+
+### Gemessener Ressourcenverbrauch
+
+| Komponente | Verbrauch |
+|---|---|
+| FaxNode idle (Gunicorn Master + 2 Worker) | ~108 MB RAM |
+| OCR-Peak (Tesseract + pdf2image, 1 Seite) | +200–350 MB RAM |
+| App-Code + Python venv | ~61 MB Disk |
+| System-Dependencies (Tesseract, Poppler, CUPS) | ~150 MB Disk |
+| CPU idle | ~0% (Polling alle 30s) |
+| CPU bei OCR | 100% auf 1 Core, 3–8s/Seite (Pi 4) / 1–3s/Seite (x86) |
+
+> **Flaschenhals ist OCR**: Tesseract belegt kurzzeitig 200–350 MB RAM pro Seite. Auf einem Raspberry Pi 4 mit 1 GB funktioniert das, bei 512 MB wird Swap benoetigt. Ab 2 GB laeuft alles komfortabel.
 
 ### Server (Linux)
-- Raspberry Pi 4 (2+ GB RAM) oder beliebiger Linux-Server
+- Raspberry Pi 4 (1+ GB RAM) oder beliebiger Linux-Server
 - Netzwerkzugang zur FritzBox / NAS
 - FritzBox mit aktivierter NAS-Funktion (SMB/CIFS)
 
