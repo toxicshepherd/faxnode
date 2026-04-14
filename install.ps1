@@ -354,8 +354,13 @@ Write-Host "         FaxNode-Dienst gestartet." -ForegroundColor Green
 # --- Fertig ---
 
 $IP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
-    $_.InterfaceAlias -notmatch "Loopback" -and $_.IPAddress -ne "127.0.0.1"
-} | Select-Object -First 1).IPAddress
+    $_.IPAddress -ne "127.0.0.1" -and
+    $_.IPAddress -notlike "169.254.*" -and
+    $_.IPAddress -notlike "25.*" -and
+    $_.IPAddress -notlike "172.25.*" -and
+    $_.InterfaceAlias -notmatch "Loopback|Hamachi|vEthernet|Bluetooth|VirtualBox|VMware"
+} | Sort-Object -Property InterfaceMetric | Select-Object -First 1).IPAddress
+if (-not $IP) { $IP = "localhost" }
 
 Write-Host ""
 Write-Host "  ======================================" -ForegroundColor Green
