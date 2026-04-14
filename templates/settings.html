@@ -57,6 +57,22 @@
         {% endif %}
     </div>
 
+    {% if printers %}
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+        <label style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.375rem;display:block;">Standarddrucker</label>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+            <select id="default-printer-select" class="status-select" style="flex:1;">
+                <option value="">Kein Standarddrucker (manuell waehlen)</option>
+                {% for name in printers %}
+                <option value="{{ name }}" {% if name == default_printer %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-sm" onclick="saveDefaultPrinter()">Speichern</button>
+        </div>
+        <p class="text-muted" style="font-size:0.75rem;margin-top:0.375rem;">Wird automatisch beim Drucken verwendet.</p>
+    </div>
+    {% endif %}
+
     <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
         <button class="btn btn-sm" onclick="discoverPrinters()" id="discover-btn">Netzwerk nach Druckern durchsuchen</button>
         <button class="btn btn-sm btn-ghost" onclick="toggleManualPrinter()" id="manual-btn">Manuell hinzufuegen</button>
@@ -260,6 +276,18 @@ function testPrinter(name) {
             if (d.ok) showToast('Testseite gesendet', name);
             else alert(d.error || 'Fehler');
         });
+}
+
+function saveDefaultPrinter() {
+    var printer = document.getElementById('default-printer-select').value;
+    fetch('/api/einstellungen/standarddrucker', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({printer: printer})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) showToast('Gespeichert', printer ? 'Standarddrucker: ' + printer : 'Standarddrucker entfernt');
+        else alert(d.error || 'Fehler');
+    });
 }
 </script>
 {% endblock %}

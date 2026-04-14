@@ -3,6 +3,7 @@ import ipaddress
 import json
 import logging
 import os
+from datetime import datetime
 import queue
 import re
 import socket
@@ -387,6 +388,7 @@ def settings():
         delete_days=config.DELETE_AFTER_DAYS,
         fax_watch_dir=config.FAX_WATCH_DIR,
         database_path=config.DATABASE,
+        default_printer=config.DEFAULT_PRINTER,
     )
 
 
@@ -447,6 +449,12 @@ def api_print_fax(fax_id):
     try:
         from printer import print_fax
         print_fax(fax["file_path"], printer_name, copies)
+        db.record_print_event(fax_id, printer_name)
+        broadcast("fax_printed", {
+            "fax_id": fax_id,
+            "printer": printer_name,
+            "printed_at": datetime.now().strftime("%d.%m.%Y %H:%M"),
+        })
         return jsonify({"ok": True})
     except Exception as e:
         logger.error("Druckfehler fuer Fax %d: %s", fax_id, e)
@@ -660,6 +668,58 @@ def api_save_archive_settings():
     return jsonify({"ok": True})
 
 
+@app.route("/api/einstellungen/standarddrucker")
+def api_get_default_printer():
+    """Aktuellen Standarddrucker abfragen."""
+    return jsonify({"printer": config.DEFAULT_PRINTER})
+
+
+@app.route("/api/einstellungen/standarddrucker", methods=["POST"])
+def api_save_default_printer():
+    """Standarddrucker festlegen."""
+    data = request.get_json()
+    printer_name = data.get("printer", "").strip()
+    if printer_name:
+        try:
+            from printer import get_printers
+            printers = get_printers()
+            if printer_name not in printers:
+                return jsonify({"ok": False, "error": "Drucker nicht gefunden"})
+        except Exception:
+            pass
+    config.DEFAULT_PRINTER = printer_name
+    _save_env_settings()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/fax/<int:fax_id>/archivieren", methods=["POST"])
+def api_archive_fax(fax_id):
+    """Fax manuell archivieren."""
+    fax = db.get_fax(fax_id)
+    if not fax:
+        abort(404)
+    db.archive_fax(fax_id)
+    broadcast("fax_archived", {
+        "fax_id": fax_id,
+        "sender_name": fax["sender_name"] or fax["phone_number"],
+    })
+    return jsonify({"ok": True})
+
+
+@app.route("/api/fax/<int:fax_id>/wiederherstellen", methods=["POST"])
+def api_unarchive_fax(fax_id):
+    """Fax aus dem Archiv wiederherstellen."""
+    fax = db.get_fax(fax_id)
+    if not fax:
+        abort(404)
+    db.unarchive_fax(fax_id)
+    broadcast("fax_unarchived", {
+        "fax_id": fax_id,
+        "sender_name": fax["sender_name"] or fax["phone_number"],
+    })
+    return jsonify({"ok": True})
+
+
 def _save_custom_categories():
     """Benutzerdefinierte Kategorien in Datei speichern."""
     defaults = {"rezept", "bestellung", "lieferschein", "rueckruf", "sonstiges"}
@@ -687,11 +747,12 @@ def _save_env_settings():
         lines = []
         if env_path.exists():
             for line in env_path.read_text().splitlines():
-                if not line.startswith(("ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=", "DELETE_AFTER_DAYS=")):
+                if not line.startswith(("ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=", "DELETE_AFTER_DAYS=", "DEFAULT_PRINTER=")):
                     lines.append(line)
         lines.append(f"ARCHIVE_AFTER_DAYS={config.ARCHIVE_AFTER_DAYS}")
         lines.append(f"FORCE_ARCHIVE_AFTER_DAYS={config.FORCE_ARCHIVE_AFTER_DAYS}")
         lines.append(f"DELETE_AFTER_DAYS={config.DELETE_AFTER_DAYS}")
+        lines.append(f"DEFAULT_PRINTER={config.DEFAULT_PRINTER}")
         env_path.write_text("\n".join(lines) + "\n")
 
 

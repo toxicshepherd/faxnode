@@ -49,6 +49,7 @@
         <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-content">
             <div class="fax-card-header">
                 <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
+                {% if fax.printed %}<span class="print-indicator" title="Gedruckt{% if fax.printed_by %} auf {{ fax.printed_by }}{% endif %}">&#9113;</span>{% endif %}
                 <span class="cat-badge cat-{{ fax.category }}">{{ categories.get(fax.category, 'Sonstiges') }}</span>
             </div>
             <div class="fax-card-meta">
@@ -69,7 +70,10 @@
                 <button class="status-btn{% if fax.status == key %} active{% endif %}" data-status="{{ key }}" onclick="event.preventDefault(); event.stopPropagation(); setStatus({{ fax.id }}, '{{ key }}')">{{ label }}</button>
                 {% endfor %}
             </div>
-            <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken" aria-label="Fax drucken">&#128424;</button>
+            <div class="fax-action-btns">
+                <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken" aria-label="Fax drucken">&#9113;</button>
+                <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); archiveFax({{ fax.id }})" title="Archivieren" aria-label="Fax archivieren">&#128451;</button>
+            </div>
         </div>
     </div>
     {% endfor %}
@@ -118,14 +122,19 @@ function renderFaxCard(f) {
         statusBtns += '<button class="status-btn' + (f.status === k ? ' active' : '') + '" data-status="' + k + '" onclick="event.preventDefault();event.stopPropagation();setStatus(' + f.id + ',\'' + k + '\')">' + escapeHtml(_statuses[k]) + '</button>';
     }
     statusBtns += '</div>';
+    var printInd = f.printed ? '<span class="print-indicator" title="Gedruckt">&#9113;</span>' : '';
     return '<div class="fax-card-row" data-fax-id="' + f.id + '">' +
         '<a href="/faxe/' + f.id + '" class="fax-card-thumb">' + thumb + '</a>' +
         '<a href="/faxe/' + f.id + '" class="fax-card-content">' +
         '<div class="fax-card-header"><span class="fax-sender">' + escapeHtml(sender) + '</span>' +
+        printInd +
         '<span class="cat-badge cat-' + f.category + '">' + escapeHtml(catLabel) + '</span></div>' +
         '<div class="fax-card-meta">' + meta + '</div>' + preview + '</a>' +
         '<div class="fax-card-actions">' + statusBtns +
-        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();quickPrint(' + f.id + ')" title="Drucken">&#128424;</button></div></div>';
+        '<div class="fax-action-btns">' +
+        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();quickPrint(' + f.id + ')" title="Drucken">&#9113;</button>' +
+        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();archiveFax(' + f.id + ')" title="Archivieren">&#128451;</button>' +
+        '</div></div></div>';
 }
 
 function loadMore() {

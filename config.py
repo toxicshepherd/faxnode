@@ -54,6 +54,9 @@ ARCHIVE_AFTER_DAYS = int(os.environ.get("ARCHIVE_AFTER_DAYS", "7"))
 # Auto-Delete nach X Tagen
 DELETE_AFTER_DAYS = int(os.environ.get("DELETE_AFTER_DAYS", "90"))
 
+# Standarddrucker (Name wie eingerichtet, leer = keiner)
+DEFAULT_PRINTER = os.environ.get("DEFAULT_PRINTER", "")
+
 # Polling-Fallback Intervall in Sekunden
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))
 

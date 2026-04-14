@@ -50,8 +50,22 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="meta-row">
+            <div class="meta-row" id="print-status-row">
+                <span class="meta-label">Gedruckt</span>
+                <span id="print-status">
+                    {% if fax.printed %}
+                    <span class="print-indicator">&#10003; {{ fax.printed_at[:16].replace('T', ' ') if fax.printed_at else '' }}</span>
+                    {% if fax.printed_by %}<span class="mono-sm text-muted" style="margin-left:0.25rem;">{{ fax.printed_by }}</span>{% endif %}
+                    {% else %}
+                    <span class="text-muted">Nein</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="meta-row" style="gap:0.5rem;">
                 <button class="btn btn-sm" onclick="printFax({{ fax.id }})">Drucken</button>
+                {% if not fax.archived %}
+                <button class="btn btn-sm btn-ghost" onclick="archiveFax({{ fax.id }})">Archivieren</button>
+                {% endif %}
             </div>
 
             {% if not fax.sender_name %}

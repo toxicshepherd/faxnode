@@ -16,21 +16,27 @@
 <div class="fax-list">
     {% if faxes %}
     {% for fax in faxes %}
-    <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card archived">
-        <div class="fax-card-header">
-            <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
-            <span class="fax-status badge badge-erledigt">Archiviert</span>
-        </div>
-        <div class="fax-card-meta">
-            <span class="mono-sm">{{ fax.received_at|replace('T', ' ') }}</span>
-            {% if fax.sender_name %}
-            <span class="mono-sm text-muted">{{ fax.phone_number }}</span>
+    <div class="fax-card-row archived" data-fax-id="{{ fax.id }}">
+        <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-content">
+            <div class="fax-card-header">
+                <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
+                {% if fax.printed %}<span class="print-indicator" title="Gedruckt">&#9113;</span>{% endif %}
+                <span class="badge badge-erledigt">Archiviert</span>
+            </div>
+            <div class="fax-card-meta">
+                <span class="mono-sm">{{ fax.received_at[:10].split('-')|reverse|join('.') }} {{ fax.received_at[11:16] }}</span>
+                {% if fax.sender_name %}
+                <span class="mono-sm text-muted">{{ fax.phone_number }}</span>
+                {% endif %}
+            </div>
+            {% if fax.ocr_text %}
+            <div class="fax-card-preview text-muted">{{ fax.ocr_text[:120] }}{% if fax.ocr_text|length > 120 %}...{% endif %}</div>
             {% endif %}
+        </a>
+        <div class="fax-card-actions">
+            <button class="btn btn-sm btn-ghost" onclick="unarchiveFax({{ fax.id }})" title="Wiederherstellen">Wiederherstellen</button>
         </div>
-        {% if fax.ocr_text %}
-        <div class="fax-card-preview text-muted">{{ fax.ocr_text[:120] }}{% if fax.ocr_text|length > 120 %}...{% endif %}</div>
-        {% endif %}
-    </a>
+    </div>
     {% endfor %}
     {% else %}
     <div class="empty-state">

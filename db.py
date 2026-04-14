@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS faxes (
     page_count INTEGER DEFAULT 1,
     archived INTEGER DEFAULT 0,
     archived_at TIMESTAMP,
+    printed INTEGER DEFAULT 0,
+    printed_at TIMESTAMP,
+    printed_by TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -151,6 +154,12 @@ def _migrate(conn):
         conn.execute("ALTER TABLE address_book ADD COLUMN printer_name TEXT")
     if "print_copies" not in addr_cols:
         conn.execute("ALTER TABLE address_book ADD COLUMN print_copies INTEGER DEFAULT 1")
+    if "printed" not in cols:
+        conn.execute("ALTER TABLE faxes ADD COLUMN printed INTEGER DEFAULT 0")
+    if "printed_at" not in cols:
+        conn.execute("ALTER TABLE faxes ADD COLUMN printed_at TIMESTAMP")
+    if "printed_by" not in cols:
+        conn.execute("ALTER TABLE faxes ADD COLUMN printed_by TEXT")
 
 
 # --- Fax Queries ---
@@ -236,6 +245,36 @@ def update_fax_ocr(fax_id, ocr_text, ocr_done=1):
         conn.execute(
             "UPDATE faxes SET ocr_text = ?, ocr_done = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (ocr_text, ocr_done, fax_id)
+        )
+
+
+def record_print_event(fax_id, printer_name):
+    """Druckvorgang fuer ein Fax aufzeichnen."""
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE faxes SET printed = 1, printed_at = CURRENT_TIMESTAMP, "
+            "printed_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (printer_name, fax_id)
+        )
+
+
+def archive_fax(fax_id):
+    """Einzelnes Fax manuell archivieren."""
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE faxes SET archived = 1, archived_at = CURRENT_TIMESTAMP, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (fax_id,)
+        )
+
+
+def unarchive_fax(fax_id):
+    """Fax aus dem Archiv wiederherstellen."""
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE faxes SET archived = 0, archived_at = NULL, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (fax_id,)
         )
 
 

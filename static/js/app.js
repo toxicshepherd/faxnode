@@ -119,6 +119,37 @@ es.addEventListener('ocr_complete', function(e) {
     }
 });
 
+es.addEventListener('fax_printed', function(e) {
+    var d = JSON.parse(e.data);
+    // Print-Indikator in der Liste hinzufuegen
+    var card = document.querySelector('.fax-card-row[data-fax-id="' + d.fax_id + '"]');
+    if (card) {
+        var header = card.querySelector('.fax-card-header');
+        if (header && !header.querySelector('.print-indicator')) {
+            var badge = header.querySelector('.cat-badge');
+            if (badge) badge.insertAdjacentHTML('beforebegin', '<span class="print-indicator" title="Gedruckt auf ' + escapeHtml(d.printer) + '">&#9113;</span>');
+        }
+    }
+    // Print-Status in der Detailansicht aktualisieren
+    var statusEl = document.getElementById('print-status');
+    if (statusEl) {
+        statusEl.innerHTML = '<span class="print-indicator">&#10003; ' + escapeHtml(d.printed_at || 'gerade eben') + '</span>' +
+            '<span class="mono-sm text-muted" style="margin-left:0.25rem;">' + escapeHtml(d.printer) + '</span>';
+    }
+});
+
+es.addEventListener('fax_archived', function(e) {
+    var d = JSON.parse(e.data);
+    var card = document.querySelector('.fax-card-row[data-fax-id="' + d.fax_id + '"]');
+    if (card && location.pathname !== '/archiv') card.remove();
+});
+
+es.addEventListener('fax_unarchived', function(e) {
+    var d = JSON.parse(e.data);
+    var card = document.querySelector('[data-fax-id="' + d.fax_id + '"]');
+    if (card && location.pathname === '/archiv') card.remove();
+});
+
 // --- Status Buttons ---
 function setStatus(faxId, status) {
     // Auto-Read-Timer abbrechen wenn User manuell Status setzt
@@ -183,12 +214,25 @@ document.addEventListener('submit', function(e) {
     }
 });
 
+// --- Default Printer Cache ---
+var _defaultPrinter = null;
+fetch('/api/einstellungen/standarddrucker').then(function(r) { return r.json(); }).then(function(d) {
+    _defaultPrinter = d.printer || null;
+}).catch(function() {});
+
 // --- Print ---
 function printFax(faxId) {
     fetch('/api/drucker').then(function(r) { return r.json(); }).then(function(printers) {
         var names = Object.keys(printers);
         if (names.length === 0) { showToast('Fehler', 'Keine Drucker gefunden'); return; }
-        var printer = names.length === 1 ? names[0] : prompt('Drucker waehlen:\n' + names.join('\n'));
+        var printer;
+        if (_defaultPrinter && names.indexOf(_defaultPrinter) !== -1) {
+            printer = _defaultPrinter;
+        } else if (names.length === 1) {
+            printer = names[0];
+        } else {
+            printer = prompt('Drucker waehlen:\n' + names.join('\n'));
+        }
         if (!printer) return;
         fetch('/api/fax/' + faxId + '/drucken', {
             method: 'POST',
@@ -201,6 +245,40 @@ function printFax(faxId) {
 }
 
 function quickPrint(faxId) { printFax(faxId); }
+
+// --- Archive ---
+function archiveFax(faxId) {
+    if (!confirm('Fax wirklich archivieren?')) return;
+    fetch('/api/fax/' + faxId + '/archivieren', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            showToast('Archiviert', 'Fax wurde ins Archiv verschoben');
+            if (location.pathname.match(/^\/faxe\/\d+$/)) {
+                location.href = '/faxe';
+                return;
+            }
+            var card = document.querySelector('.fax-card-row[data-fax-id="' + faxId + '"]');
+            if (card) card.remove();
+        } else {
+            showToast('Fehler', d.error || 'Archivierung fehlgeschlagen');
+        }
+    });
+}
+
+function unarchiveFax(faxId) {
+    fetch('/api/fax/' + faxId + '/wiederherstellen', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            showToast('Wiederhergestellt', 'Fax zurueck in der Faxliste');
+            var card = document.querySelector('[data-fax-id="' + faxId + '"]');
+            if (card) card.remove();
+        }
+    });
+}
 
 // --- Address Book ---
 function toggleAddressForm() {

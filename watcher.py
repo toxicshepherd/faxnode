@@ -4,7 +4,7 @@ import re
 import threading
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from watchdog.observers import Observer
@@ -144,6 +144,13 @@ def _check_auto_print(fax_id, phone_number, file_path):
             copies = rule.get("print_copies") or rule.get("copies") or 1
             printer_name = rule["printer_name"]
             print_fax(file_path, printer_name, copies)
+            db.record_print_event(fax_id, printer_name)
+            if _broadcast:
+                _broadcast("fax_printed", {
+                    "fax_id": fax_id,
+                    "printer": printer_name,
+                    "printed_at": datetime.now().strftime("%d.%m.%Y %H:%M"),
+                })
             logger.info("Auto-Print: Fax %d an %s (%d Kopien)",
                         fax_id, printer_name, copies)
         except Exception as e:
