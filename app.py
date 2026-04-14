@@ -29,7 +29,7 @@ def safe_int(value, default=1, minimum=1, maximum=None):
     except (ValueError, TypeError):
         return default
 
-SETUP_HELPER = str(Path(config.BASE_DIR) / "setup-helper.sh")
+from compat import get_printer_service, get_nas_service, get_network_service
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -117,39 +117,12 @@ def setup():
 @app.route("/api/setup/scan-network", methods=["POST"])
 def api_setup_scan_network():
     """Gateway und gaengige NAS-IPs nach SMB scannen."""
-    hosts = []
-    gw = None
-    # Gateway ermitteln (typisch: FritzBox)
     try:
-        result = subprocess.run(
-            ["ip", "route"], capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.splitlines():
-            if line.startswith("default"):
-                parts = line.split()
-                if len(parts) >= 3:
-                    gw = parts[2]
-                    break
-        if gw:
-            hosts.append(gw)
-    except (subprocess.TimeoutExpired, OSError) as e:
-        logger.debug("Gateway-Erkennung fehlgeschlagen: %s", e)
-    # Gaengige FritzBox-IPs
-    for ip in ["192.168.178.1", "192.168.1.1", "192.168.0.1"]:
-        if ip not in hosts:
-            hosts.append(ip)
-    found = []
-    for ip in hosts:
-        try:
-            r = subprocess.run(
-                ["nc", "-zw1", ip, "445"],
-                capture_output=True, timeout=3
-            )
-            if r.returncode == 0:
-                found.append({"ip": ip, "is_gateway": ip == gw})
-        except (subprocess.TimeoutExpired, OSError):
-            pass
-    return jsonify({"ok": True, "hosts": found})
+        nas = get_nas_service()
+        found = nas.scan_network_for_smb()
+        return jsonify({"ok": True, "hosts": found})
+    except Exception as e:
+        return jsonify({"ok": True, "hosts": [], "error": str(e)})
 
 
 @app.route("/api/setup/list-shares", methods=["POST"])
@@ -164,17 +137,8 @@ def api_setup_list_shares():
     if not re.match(r"^[\d.]+$", ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
     try:
-        env = {**os.environ, "PASSWD": password}
-        r = subprocess.run(
-            ["smbclient", "-L", f"//{ip}", "-U", username],
-            capture_output=True, text=True, timeout=10, env=env
-        )
-        shares = []
-        for line in r.stdout.splitlines():
-            line = line.strip()
-            m = re.match(r"^(\S+)\s+Disk\s+(.*)$", line)
-            if m and not m.group(1).endswith("$"):
-                shares.append({"name": m.group(1), "comment": m.group(2).strip()})
+        nas = get_nas_service()
+        shares = nas.list_shares(ip, username, password)
         if not shares:
             return jsonify({"ok": False, "error": "Keine Freigaben gefunden oder Zugangsdaten falsch"})
         return jsonify({"ok": True, "shares": shares})
@@ -195,27 +159,12 @@ def api_setup_browse_share():
     password = data.get("password", "")
     if not re.match(r"^[\d.]+$", ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
-    # Pfad sanitizen: nur sichere Zeichen erlauben
-    if path and not re.match(r"^[\w./ -]+$", path):
+    if path and not re.match(r"^[\w./ \\-]+$", path):
         return jsonify({"ok": False, "error": "Ungueltiger Pfad"})
-    cmd_path = f"{path}/" if path else ""
     try:
-        env = {**os.environ, "PASSWD": password}
-        r = subprocess.run(
-            ["smbclient", f"//{ip}/{share}", "-U", username,
-             "-c", f"ls {cmd_path}*"],
-            capture_output=True, text=True, timeout=10, env=env
-        )
-        entries = []
-        pdf_count = 0
-        for line in r.stdout.splitlines():
-            line = line.strip()
-            m = re.match(r"^(\S+)\s+([A-Z]*D[A-Z]*)\s+\d+\s+.+$", line)
-            if m and m.group(1) not in (".", ".."):
-                entries.append({"name": m.group(1), "type": "dir"})
-            elif line.lower().endswith(".pdf"):
-                pdf_count += 1
-        return jsonify({"ok": True, "dirs": entries, "pdf_count": pdf_count})
+        nas = get_nas_service()
+        result = nas.browse_share(ip, share, path, username, password)
+        return jsonify({"ok": True, **result})
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "error": "Zeitueberschreitung"})
     except Exception as e:
@@ -224,104 +173,30 @@ def api_setup_browse_share():
 
 @app.route("/api/setup/mount-nas", methods=["POST"])
 def api_setup_mount_nas():
-    """NAS-Credentials speichern, fstab eintragen, mounten."""
+    """NAS-Verbindung einrichten (mount auf Linux, UNC auf Windows)."""
     data = request.get_json()
     ip = data.get("ip", "").strip()
     share = data.get("share", "").strip()
     path = data.get("path", "").strip()
     username = data.get("username", "").strip()
     password = data.get("password", "")
-    mount_point = "/mnt/nas/faxe"
     if not re.match(r"^[\d.]+$", ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
-
-    smb_path = f"//{ip}/{share}"
-    if path:
-        smb_path += f"/{path}"
-
     try:
-        # 1. Credentials schreiben (per stdin, nicht als Argument — sonst im Journal sichtbar)
-        creds_content = f"username={username}\npassword={password}\n"
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "write-creds"],
-            input=creds_content, capture_output=True, text=True, timeout=5
-        )
-        if r.returncode != 0:
-            return jsonify({"ok": False, "error": f"Credentials-Fehler: {r.stderr}"})
-
-        # 2. fstab Eintrag
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "add-fstab", smb_path, mount_point],
-            capture_output=True, text=True, timeout=5
-        )
-        if r.returncode != 0:
-            return jsonify({"ok": False, "error": f"fstab-Fehler: {r.stderr}"})
-
-        # 3. Mounten
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "mount", mount_point],
-            capture_output=True, text=True, timeout=15
-        )
-        if r.returncode != 0:
-            return jsonify({"ok": False, "error": f"Mount-Fehler: {r.stderr}"})
-
-        # 4. Pruefen ob Dateien lesbar sind
-        try:
-            files = os.listdir(mount_point)
-            pdfs = [f for f in files if f.lower().endswith(".pdf")]
-            # Lesbarkeitspruefung
-            if pdfs:
-                test_path = os.path.join(mount_point, pdfs[0])
-                with open(test_path, "rb") as f:
-                    f.read(10)
-            return jsonify({"ok": True, "mount_point": mount_point, "pdf_count": len(pdfs)})
-        except Exception as e:
-            return jsonify({"ok": False, "error": f"Mount erfolgreich, aber Dateien nicht lesbar: {e}"})
-
+        nas = get_nas_service()
+        result = nas.connect_nas(ip, share, path, username, password)
+        if not result.get("ok"):
+            return jsonify(result)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
 
-def _discover_printers_impl():
-    """Netzwerkdrucker via CUPS/lpinfo suchen (gemeinsame Logik)."""
-    r = subprocess.run(
-        ["sudo", SETUP_HELPER, "discover-printers"],
-        capture_output=True, text=True, timeout=20
-    )
-    printers = []
-    seen = set()
-    for line in r.stdout.splitlines():
-        if line.strip() == "---END---":
-            break
-        parts = line.strip().split(" ", 1)
-        if len(parts) == 2:
-            uri = parts[1].strip()
-            if uri in seen:
-                continue
-            seen.add(uri)
-            name = uri.split("/")[-1] if "/" in uri else uri
-            name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-            printers.append({"uri": uri, "name": name})
-    return printers
-
-
-def _add_printer_impl(name, uri):
-    """Drucker in CUPS einrichten (gemeinsame Logik). Gibt (ok, error_or_name) zurueck."""
-    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-    r = subprocess.run(
-        ["sudo", SETUP_HELPER, "add-printer", name, uri, "everywhere"],
-        capture_output=True, text=True, timeout=15
-    )
-    if r.returncode != 0:
-        return False, r.stderr.strip() or "Drucker konnte nicht hinzugefuegt werden"
-    return True, name
-
-
 @app.route("/api/setup/discover-printers", methods=["POST"])
 def api_setup_discover_printers():
-    """Netzwerkdrucker via CUPS/lpinfo suchen."""
+    """Netzwerkdrucker suchen."""
     try:
-        printers = _discover_printers_impl()
+        printers = get_printer_service().discover_printers()
         return jsonify({"ok": True, "printers": printers})
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "printers": [], "error": "Suche dauert zu lange — evtl. keine Netzwerkdrucker erreichbar"})
@@ -331,14 +206,14 @@ def api_setup_discover_printers():
 
 @app.route("/api/setup/add-printer", methods=["POST"])
 def api_setup_add_printer():
-    """Drucker in CUPS einrichten."""
+    """Drucker einrichten."""
     data = request.get_json()
     name = data.get("name", "").strip()
     uri = data.get("uri", "").strip()
     if not name or not uri:
         return jsonify({"ok": False, "error": "Name und URI erforderlich"})
     try:
-        ok, result = _add_printer_impl(name, uri)
+        ok, result = get_printer_service().add_printer(name, uri)
         if not ok:
             return jsonify({"ok": False, "error": result})
         return jsonify({"ok": True, "name": result})
@@ -661,9 +536,9 @@ def api_delete_print_rule(rule_id):
 
 @app.route("/api/drucker/suchen", methods=["POST"])
 def api_discover_printers():
-    """Netzwerkdrucker via CUPS/lpinfo suchen."""
+    """Netzwerkdrucker suchen."""
     try:
-        printers = _discover_printers_impl()
+        printers = get_printer_service().discover_printers()
         return jsonify({"ok": True, "printers": printers})
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "printers": [], "error": "Suche dauert zu lange"})
@@ -673,14 +548,14 @@ def api_discover_printers():
 
 @app.route("/api/drucker/hinzufuegen", methods=["POST"])
 def api_add_printer():
-    """Drucker in CUPS einrichten."""
+    """Drucker einrichten."""
     data = request.get_json()
     name = data.get("name", "").strip()
     uri = data.get("uri", "").strip()
     if not name or not uri:
         return jsonify({"ok": False, "error": "Name und URI erforderlich"})
     try:
-        ok, result = _add_printer_impl(name, uri)
+        ok, result = get_printer_service().add_printer(name, uri)
         if not ok:
             return jsonify({"ok": False, "error": result})
         return jsonify({"ok": True, "name": result})
@@ -690,15 +565,11 @@ def api_add_printer():
 
 @app.route("/api/drucker/<name>", methods=["DELETE"])
 def api_remove_printer(name):
-    """Drucker aus CUPS entfernen."""
-    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+    """Drucker entfernen."""
     try:
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "remove-printer", name],
-            capture_output=True, text=True, timeout=10
-        )
-        if r.returncode != 0:
-            return jsonify({"ok": False, "error": r.stderr.strip() or "Drucker konnte nicht entfernt werden"})
+        ok, error = get_printer_service().remove_printer(name)
+        if not ok:
+            return jsonify({"ok": False, "error": error})
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -707,14 +578,10 @@ def api_remove_printer(name):
 @app.route("/api/drucker/<name>/test", methods=["POST"])
 def api_test_printer(name):
     """Testseite an Drucker senden."""
-    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
     try:
-        r = subprocess.run(
-            ["sudo", SETUP_HELPER, "test-printer", name],
-            capture_output=True, text=True, timeout=15
-        )
-        if r.returncode != 0:
-            return jsonify({"ok": False, "error": r.stderr.strip() or "Testseite konnte nicht gedruckt werden"})
+        ok, error = get_printer_service().test_printer(name)
+        if not ok:
+            return jsonify({"ok": False, "error": error})
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})

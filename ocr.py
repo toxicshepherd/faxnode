@@ -30,7 +30,10 @@ def _ocr_worker():
             from pdf2image import convert_from_path
             import pytesseract
 
-            images = convert_from_path(file_path, dpi=150)
+            poppler_kwargs = {}
+            if config.POPPLER_PATH:
+                poppler_kwargs["poppler_path"] = config.POPPLER_PATH
+            images = convert_from_path(file_path, dpi=150, **poppler_kwargs)
             try:
                 # Thumbnail generieren falls fehlend
                 has_thumbnail = bool(fax["thumbnail_path"])

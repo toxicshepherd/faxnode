@@ -429,7 +429,7 @@ function discoverPrinters() {
         .then(function(d) {
             setBtnLoading('discover-btn', false, 'Drucker im Netzwerk suchen');
             if (!d.ok || d.printers.length === 0) {
-                setMsg('printer-msg', 'info', 'Keine Netzwerkdrucker gefunden. Kann spaeter in den Einstellungen oder ueber CUPS (Port 631) eingerichtet werden.');
+                setMsg('printer-msg', 'info', 'Keine Netzwerkdrucker gefunden. Kann spaeter in den Einstellungen eingerichtet werden.');
                 return;
             }
             var list = document.getElementById('discovered-printers');

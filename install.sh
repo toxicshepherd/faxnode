@@ -52,7 +52,7 @@ echo "      Fertig."
 echo "[3/7] Python-Umgebung einrichten..."
 python3 -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip -q
-"$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -q
+"$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements-linux.txt" -q
 echo "      Fertig."
 
 # 4. Verzeichnisse
