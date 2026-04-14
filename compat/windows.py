@@ -118,18 +118,25 @@ class WindowsNasService(NasService):
         return found
 
     def _store_credentials(self, ip: str, username: str, password: str):
-        """Credentials im Windows Credential Manager speichern (nicht in Prozessliste sichtbar)."""
-        # Alte Credentials entfernen (Fehler ignorieren falls nicht vorhanden)
+        """SMB-Session authentifizieren und Credentials persistent speichern."""
+        # Im Credential Manager speichern (fuer persistente Verbindungen)
         subprocess.run(
             ["cmdkey", f"/delete:{ip}"],
             capture_output=True, text=True, timeout=5
         )
-        r = subprocess.run(
+        subprocess.run(
             ["cmdkey", f"/add:{ip}", f"/user:{username}", f"/pass:{password}"],
             capture_output=True, text=True, timeout=5
         )
-        if r.returncode != 0:
-            logger.warning("cmdkey fehlgeschlagen: %s", r.stderr.strip())
+        # SMB-Session explizit authentifizieren (cmdkey allein reicht nicht fuer net view)
+        subprocess.run(
+            ["net", "use", f"\\\\{ip}\\IPC$", "/delete", "/yes"],
+            capture_output=True, text=True, timeout=5
+        )
+        subprocess.run(
+            ["net", "use", f"\\\\{ip}\\IPC$", f"/user:{username}", password],
+            capture_output=True, text=True, timeout=10
+        )
 
     def list_shares(self, ip: str, username: str, password: str) -> list[dict]:
         # Credentials sicher im Credential Manager speichern
