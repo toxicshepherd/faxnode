@@ -2,7 +2,7 @@
 ; Erstellt ein klassisches Windows-Installationsfenster.
 
 #define MyAppName "FaxNode"
-#define MyAppVersion "1.1"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "FaxNode"
 #define MyAppExeName "FaxNode.exe"
 
@@ -18,6 +18,7 @@ OutputDir=output
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=faxnode.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -35,11 +36,12 @@ Name: "autostart"; Description: "Beim Windows-Start automatisch starten"; GroupD
 
 [Files]
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "faxnode.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\faxnode.ico"
 Name: "{group}\{#MyAppName} deinstallieren"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\faxnode.ico"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "FaxNode"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart

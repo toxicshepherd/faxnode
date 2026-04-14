@@ -10,7 +10,7 @@ import threading
 import urllib.request
 
 APP_NAME = "FaxNode"
-VERSION = "1.2.2"
+VERSION = "2.1.0"
 DISCOVERY_PORT = 9742  # Fester Discovery-Port
 
 # Konfigurationsverzeichnis: %APPDATA%/FaxNode/

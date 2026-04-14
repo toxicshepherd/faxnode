@@ -23,7 +23,7 @@ jobs:
 
       - name: Build exe with PyInstaller
         working-directory: client
-        run: pyinstaller --onefile --noconsole --name "FaxNode" --hidden-import clr --hidden-import webview faxnode_client.py
+        run: pyinstaller --onefile --noconsole --name "FaxNode" --icon faxnode.ico --hidden-import clr --hidden-import webview faxnode_client.py
 
       - name: Build installer with Inno Setup
         working-directory: client
