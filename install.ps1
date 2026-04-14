@@ -328,9 +328,11 @@ if (-not $fwRule) {
     Write-Host "         Firewall-Regel vorhanden." -ForegroundColor Green
 }
 
-# Bestehenden Dienst stoppen
-& $nssmPath stop FaxNode 2>$null | Out-Null
-& $nssmPath remove FaxNode confirm 2>$null | Out-Null
+# Bestehenden Dienst stoppen (ignoriere Fehler bei Erstinstallation)
+$ErrorActionPreference = "SilentlyContinue"
+& $nssmPath stop FaxNode 2>&1 | Out-Null
+& $nssmPath remove FaxNode confirm 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
 
 # Neuen Dienst einrichten
 $pythonExe = "$venvDir\Scripts\python.exe"
