@@ -819,20 +819,22 @@ def start_background_services():
 
 
 # Background-Services nur einmal starten (nicht in jedem Gunicorn-Worker).
-# Gunicorn mit --preload importiert das Modul einmal im Master, dann forkt.
-# Ohne --preload: jeder Worker importiert separat.  Wir nutzen ein Lockfile
-# damit nur der erste Worker die Services startet.
-import fcntl as _fcntl
-
-_bg_lock_path = os.path.join(os.path.dirname(config.DATABASE), ".bg_services.lock")
+# Auf Linux (Gunicorn, multi-process): fcntl-Lock stellt sicher, dass nur
+# ein Worker die Services startet.  Auf Windows (Waitress, single-process):
+# immer primary — kein Lock noetig.
 _bg_lock_fd = None  # Module-level: haelt den Lock solange der Prozess lebt
 
 def _try_acquire_bg_lock():
-    """Versuche exklusiven Lock zu bekommen (non-blocking). True = erster Worker."""
+    """Versuche exklusiven Lock zu bekommen. Auf Windows immer True."""
     global _bg_lock_fd
     try:
-        _bg_lock_fd = open(_bg_lock_path, "w")
-        _fcntl.flock(_bg_lock_fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+        import fcntl
+        lock_path = os.path.join(os.path.dirname(config.DATABASE), ".bg_services.lock")
+        _bg_lock_fd = open(lock_path, "w")
+        fcntl.flock(_bg_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except ImportError:
+        # Windows: kein fcntl, kein Gunicorn-Fork → immer primary
         return True
     except (OSError, IOError):
         return False
