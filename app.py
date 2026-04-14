@@ -74,12 +74,18 @@ def broadcast(event_type: str, data: dict):
 def events():
     """SSE-Stream fuer Live-Updates."""
     def stream():
+        import time as _time
         q = queue.Queue(maxsize=50)
         with _sse_lock:
             _sse_listeners.append(q)
+        # Maximale Verbindungsdauer (5 Min). Der Client (EventSource)
+        # verbindet sich danach automatisch neu.  Verhindert Zombie-
+        # Verbindungen, die Gunicorn-Threads blockieren.
+        max_age = 300  # Sekunden
+        start = _time.monotonic()
         try:
             yield "event: connected\ndata: {}\n\n"
-            while True:
+            while _time.monotonic() - start < max_age:
                 try:
                     payload = q.get(timeout=30)
                     yield payload

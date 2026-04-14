@@ -26,6 +26,12 @@ function formatDate(str) {
 // --- SSE ---
 var es = new EventSource('/events');
 
+// SSE-Verbindung sauber schliessen wenn die Seite verlassen wird,
+// damit der Gunicorn-Thread sofort freigegeben wird.
+window.addEventListener('beforeunload', function() {
+    es.close();
+});
+
 es.addEventListener('error', function() {
     // EventSource reconnects automatisch, aber wir loggen es
     console.warn('SSE-Verbindung unterbrochen, versuche erneut...');
