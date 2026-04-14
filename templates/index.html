@@ -71,8 +71,8 @@
                 {% endfor %}
             </div>
             <div class="fax-action-btns">
-                <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); quickPrint({{ fax.id }})" title="Drucken" aria-label="Fax drucken">&#9113;</button>
-                <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); archiveFax({{ fax.id }})" title="Archivieren" aria-label="Fax archivieren">&#128451;</button>
+                <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); quickPrint({{ fax.id }})">Drucken</button>
+                <button class="btn btn-sm btn-ghost" onclick="event.preventDefault(); event.stopPropagation(); archiveFax({{ fax.id }})">Archivieren</button>
             </div>
         </div>
     </div>
@@ -132,8 +132,8 @@ function renderFaxCard(f) {
         '<div class="fax-card-meta">' + meta + '</div>' + preview + '</a>' +
         '<div class="fax-card-actions">' + statusBtns +
         '<div class="fax-action-btns">' +
-        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();quickPrint(' + f.id + ')" title="Drucken">&#9113;</button>' +
-        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();archiveFax(' + f.id + ')" title="Archivieren">&#128451;</button>' +
+        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();quickPrint(' + f.id + ')">Drucken</button>' +
+        '<button class="btn btn-sm btn-ghost" onclick="event.preventDefault();event.stopPropagation();archiveFax(' + f.id + ')">Archivieren</button>' +
         '</div></div></div>';
 }
 
