@@ -409,7 +409,7 @@ function mountNas() {
         setBtnLoading('mount-btn', false, 'Verbindung einrichten');
         if (d.ok) {
             setMsg('mount-msg', 'ok', 'Verbindung steht! ' + d.pdf_count + ' PDFs gefunden und lesbar.');
-            _mountPoint = d.mount_point;
+            _mountPoint = d.fax_dir || d.mount_point;
             document.getElementById('mount-next').disabled = false;
         } else {
             setMsg('mount-msg', 'err', d.error);
@@ -508,7 +508,7 @@ function saveSetup() {
     fetch('/api/setup/save', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({fax_dir: _mountPoint || '/mnt/nas/faxe'})
+        body: JSON.stringify({fax_dir: _mountPoint})
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) {
             document.querySelector('.setup').innerHTML =
