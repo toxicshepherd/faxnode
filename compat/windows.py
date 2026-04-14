@@ -147,6 +147,8 @@ class WindowsNasService(NasService):
             capture_output=True, text=True, timeout=10
         )
         shares = []
+        if not r.stdout:
+            return shares
         in_table = False
         for line in r.stdout.splitlines():
             stripped = line.strip()
