@@ -40,7 +40,7 @@ class WindowsPrinterService(PrinterService):
         r = subprocess.run(
             [_SUMATRA_PATH, "-print-to", printer_name,
              "-print-count", str(copies), "-silent", file_path],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, encoding="oem", timeout=30
         )
         if r.returncode != 0:
             raise RuntimeError(f"Druckfehler: {r.stderr.strip()}")
@@ -60,7 +60,7 @@ class WindowsPrinterService(PrinterService):
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
                  f'Add-Printer -Name "{name}" -PortName "{uri}"'],
-                capture_output=True, text=True, timeout=15
+                capture_output=True, encoding="oem", timeout=15
             )
             if r.returncode != 0:
                 return False, r.stderr.strip() or "Drucker konnte nicht hinzugefuegt werden"
@@ -74,7 +74,7 @@ class WindowsPrinterService(PrinterService):
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
                  f'Remove-Printer -Name "{name}"'],
-                capture_output=True, text=True, timeout=10
+                capture_output=True, encoding="oem", timeout=10
             )
             if r.returncode != 0:
                 return False, r.stderr.strip() or "Drucker konnte nicht entfernt werden"
@@ -88,7 +88,7 @@ class WindowsPrinterService(PrinterService):
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
                  f'rundll32 printui.dll,PrintUIEntry /k /n "{name}"'],
-                capture_output=True, text=True, timeout=15
+                capture_output=True, encoding="oem", timeout=15
             )
             if r.returncode != 0:
                 return False, r.stderr.strip() or "Testseite fehlgeschlagen"
@@ -122,20 +122,20 @@ class WindowsNasService(NasService):
         # Im Credential Manager speichern (fuer persistente Verbindungen)
         subprocess.run(
             ["cmdkey", f"/delete:{ip}"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, encoding="oem", timeout=5
         )
         subprocess.run(
             ["cmdkey", f"/add:{ip}", f"/user:{username}", f"/pass:{password}"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, encoding="oem", timeout=5
         )
         # SMB-Session explizit authentifizieren (cmdkey allein reicht nicht fuer net view)
         subprocess.run(
             ["net", "use", f"\\\\{ip}\\IPC$", "/delete", "/yes"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, encoding="oem", timeout=5
         )
         subprocess.run(
             ["net", "use", f"\\\\{ip}\\IPC$", f"/user:{username}", password],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, encoding="oem", timeout=10
         )
 
     def list_shares(self, ip: str, username: str, password: str) -> list[dict]:
@@ -144,7 +144,7 @@ class WindowsNasService(NasService):
 
         r = subprocess.run(
             ["net", "view", f"\\\\{ip}"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, encoding="oem", timeout=10
         )
         shares = []
         if not r.stdout:
@@ -194,7 +194,7 @@ class WindowsNasService(NasService):
         # Bestehende Verbindung trennen (falls vorhanden)
         subprocess.run(
             ["net", "use", unc_share, "/delete", "/yes"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, encoding="oem", timeout=5
         )
 
         # Credentials sicher im Credential Manager speichern
@@ -203,7 +203,7 @@ class WindowsNasService(NasService):
         # Persistente Verbindung herstellen (ohne Passwort auf der CLI)
         r = subprocess.run(
             ["net", "use", unc_share, "/persistent:yes"],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, encoding="oem", timeout=15
         )
         if r.returncode != 0:
             return {"ok": False, "error": f"Verbindungsfehler: {r.stderr.strip()}"}
@@ -234,7 +234,7 @@ class WindowsNetworkService(NetworkService):
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
                  "(Get-NetRoute -DestinationPrefix '0.0.0.0/0').NextHop"],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, encoding="oem", timeout=5
             )
             lines = r.stdout.strip().splitlines()
             if lines:

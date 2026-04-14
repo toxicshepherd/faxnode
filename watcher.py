@@ -157,8 +157,7 @@ def sync_directory(initial=False):
     Beim schnellen Polling werden nur neue Dateien (nicht in _known_files) verarbeitet.
     """
     watch_dir = config.FAX_WATCH_DIR
-    if not os.path.isdir(watch_dir):
-        logger.warning("FAX_WATCH_DIR existiert nicht: %s", watch_dir)
+    if not watch_dir or not os.path.isdir(watch_dir):
         return
 
     try:
