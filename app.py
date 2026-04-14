@@ -285,9 +285,10 @@ def api_setup_save():
     # Config im Speicher aktualisieren
     config.FAX_WATCH_DIR = fax_dir
 
-    # DB initialisieren und Hintergrund-Services starten
+    # DB initialisieren und Hintergrund-Services starten (nur im primaeren Worker)
     db.init_db()
-    start_background_services()
+    if _is_primary:
+        start_background_services()
 
     return jsonify({"ok": True})
 
@@ -817,15 +818,36 @@ def start_background_services():
     start_scheduler()
 
 
-# Discovery immer starten (auch vor Setup-Wizard, damit Clients den Server finden)
-_discovery_thread = threading.Thread(target=_discovery_responder, daemon=True, name="udp-discovery")
-_discovery_thread.start()
+# Background-Services nur einmal starten (nicht in jedem Gunicorn-Worker).
+# Gunicorn mit --preload importiert das Modul einmal im Master, dann forkt.
+# Ohne --preload: jeder Worker importiert separat.  Wir nutzen ein Lockfile
+# damit nur der erste Worker die Services startet.
+import fcntl as _fcntl
+
+_bg_lock_path = os.path.join(os.path.dirname(config.DATABASE), ".bg_services.lock")
+_bg_lock_fd = None  # Module-level: haelt den Lock solange der Prozess lebt
+
+def _try_acquire_bg_lock():
+    """Versuche exklusiven Lock zu bekommen (non-blocking). True = erster Worker."""
+    global _bg_lock_fd
+    try:
+        _bg_lock_fd = open(_bg_lock_path, "w")
+        _fcntl.flock(_bg_lock_fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+        return True
+    except (OSError, IOError):
+        return False
+
+_is_primary = _try_acquire_bg_lock()
 
 with app.app_context():
     db.init_db()
     _load_custom_categories()
-    if is_setup_done():
-        start_background_services()
+    if _is_primary:
+        _discovery_thread = threading.Thread(
+            target=_discovery_responder, daemon=True, name="udp-discovery")
+        _discovery_thread.start()
+        if is_setup_done():
+            start_background_services()
 
 
 if __name__ == "__main__":

@@ -7,12 +7,6 @@ function updateTabTitle() {
     document.title = _unreadCount > 0 ? '(' + _unreadCount + ') ' + base : base;
 }
 updateTabTitle();
-setInterval(function() {
-    fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
-        _unreadCount = d.count;
-        updateTabTitle();
-    }).catch(function() {});
-}, 30000);
 
 // --- Date Formatting ---
 function formatDate(str) {
@@ -220,34 +214,43 @@ document.addEventListener('submit', function(e) {
     }
 });
 
-// --- Default Printer Cache ---
+// --- Default Printer Cache (lazy loaded) ---
 var _defaultPrinter = null;
-fetch('/api/einstellungen/standarddrucker').then(function(r) { return r.json(); }).then(function(d) {
-    _defaultPrinter = d.printer || null;
-}).catch(function() {});
+var _defaultPrinterLoaded = false;
 
 // --- Print ---
 function printFax(faxId) {
-    fetch('/api/drucker').then(function(r) { return r.json(); }).then(function(printers) {
-        var names = Object.keys(printers);
-        if (names.length === 0) { showToast('Fehler', 'Keine Drucker gefunden'); return; }
-        var printer;
-        if (_defaultPrinter && names.indexOf(_defaultPrinter) !== -1) {
-            printer = _defaultPrinter;
-        } else if (names.length === 1) {
-            printer = names[0];
-        } else {
-            printer = prompt('Drucker waehlen:\n' + names.join('\n'));
-        }
-        if (!printer) return;
-        fetch('/api/fax/' + faxId + '/drucken', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({printer: printer, copies: 1})
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            showToast(d.ok ? 'Druckauftrag gesendet' : 'Fehler', d.error || printer);
+    function doPrint(defaultPrinter) {
+        fetch('/api/drucker').then(function(r) { return r.json(); }).then(function(printers) {
+            var names = Object.keys(printers);
+            if (names.length === 0) { showToast('Fehler', 'Keine Drucker gefunden'); return; }
+            var printer;
+            if (defaultPrinter && names.indexOf(defaultPrinter) !== -1) {
+                printer = defaultPrinter;
+            } else if (names.length === 1) {
+                printer = names[0];
+            } else {
+                printer = prompt('Drucker waehlen:\n' + names.join('\n'));
+            }
+            if (!printer) return;
+            fetch('/api/fax/' + faxId + '/drucken', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({printer: printer, copies: 1})
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                showToast(d.ok ? 'Druckauftrag gesendet' : 'Fehler', d.error || printer);
+            });
         });
-    });
+    }
+    if (_defaultPrinterLoaded) {
+        doPrint(_defaultPrinter);
+    } else {
+        fetch('/api/einstellungen/standarddrucker').then(function(r) { return r.json(); }).then(function(d) {
+            _defaultPrinter = d.printer || null;
+            _defaultPrinterLoaded = true;
+            doPrint(_defaultPrinter);
+        }).catch(function() { _defaultPrinterLoaded = true; doPrint(null); });
+    }
 }
 
 function quickPrint(faxId) { printFax(faxId); }
