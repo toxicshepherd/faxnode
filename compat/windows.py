@@ -67,10 +67,13 @@ class WindowsPrinterService(PrinterService):
             if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://[\w.\-:/]+$", uri):
                 return False, f"Ungueltige Drucker-URI: {uri}"
 
+        # Single-Quotes in PowerShell: ' wird zu '' escaped
+        ps_name = name.replace("'", "''")
+        ps_uri = uri.replace("'", "''")
         try:
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
-                 f'Add-Printer -Name "{name}" -PortName "{uri}"'],
+                 f"Add-Printer -Name '{ps_name}' -PortName '{ps_uri}'"],
                 capture_output=True, encoding="oem", timeout=15
             )
             if r.returncode != 0:
@@ -81,10 +84,11 @@ class WindowsPrinterService(PrinterService):
 
     def remove_printer(self, name: str) -> tuple[bool, str]:
         name = re.sub(r"[^a-zA-Z0-9_\- ]", "_", name)
+        ps_name = name.replace("'", "''")
         try:
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
-                 f'Remove-Printer -Name "{name}"'],
+                 f"Remove-Printer -Name '{ps_name}'"],
                 capture_output=True, encoding="oem", timeout=10
             )
             if r.returncode != 0:
@@ -95,10 +99,11 @@ class WindowsPrinterService(PrinterService):
 
     def test_printer(self, name: str) -> tuple[bool, str]:
         name = re.sub(r"[^a-zA-Z0-9_\- ]", "_", name)
+        ps_name = name.replace("'", "''")
         try:
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
-                 f'rundll32 printui.dll,PrintUIEntry /k /n "{name}"'],
+                 f"rundll32 printui.dll,PrintUIEntry /k /n '{ps_name}'"],
                 capture_output=True, encoding="oem", timeout=15
             )
             if r.returncode != 0:

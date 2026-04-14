@@ -5,6 +5,11 @@ from contextlib import contextmanager
 from config import DATABASE
 
 
+def _escape_like(value: str) -> str:
+    """LIKE-Wildcards escapen (%, _, \\)."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _sanitize_fts_query(query: str) -> str:
     """FTS5-Metazeichen escapen fuer sichere MATCH-Queries.
 
@@ -154,6 +159,7 @@ def get_faxes(status=None, category=None, archived=0, search=None, limit=100, of
     """Faxe abfragen mit optionalen Filtern."""
     with db_connection() as conn:
         if search:
+            escaped = _escape_like(search)
             query = """
                 SELECT f.*, ab.name as sender_name
                 FROM faxes f
@@ -164,10 +170,10 @@ def get_faxes(status=None, category=None, archived=0, search=None, limit=100, of
                     UNION
                     SELECT f2.id FROM faxes f2
                     LEFT JOIN address_book ab2 ON f2.phone_number = ab2.phone_number
-                    WHERE f2.phone_number LIKE ? OR ab2.name LIKE ?
+                    WHERE f2.phone_number LIKE ? ESCAPE '\\' OR ab2.name LIKE ? ESCAPE '\\'
                 )
             """
-            params = [archived, _sanitize_fts_query(search), f"%{search}%", f"%{search}%"]
+            params = [archived, _sanitize_fts_query(search), f"%{escaped}%", f"%{escaped}%"]
         else:
             query = """
                 SELECT f.*, ab.name as sender_name
@@ -399,14 +405,15 @@ def get_archive_count(search=None):
     """Gesamtanzahl archivierter Faxe (fuer Pagination)."""
     with db_connection() as conn:
         if search:
+            escaped = _escape_like(search)
             row = conn.execute(
                 """SELECT COUNT(*) as cnt FROM faxes f
                    LEFT JOIN address_book ab ON f.phone_number = ab.phone_number
                    WHERE f.archived = 1 AND (
                        f.id IN (SELECT rowid FROM faxes_fts WHERE faxes_fts MATCH ?)
-                       OR f.phone_number LIKE ? OR ab.name LIKE ?
+                       OR f.phone_number LIKE ? ESCAPE '\\' OR ab.name LIKE ? ESCAPE '\\'
                    )""",
-                (_sanitize_fts_query(search), f"%{search}%", f"%{search}%")
+                (_sanitize_fts_query(search), f"%{escaped}%", f"%{escaped}%")
             ).fetchone()
         else:
             row = conn.execute(

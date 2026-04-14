@@ -1,4 +1,5 @@
 """FaxNode – Flask App."""
+import ipaddress
 import json
 import logging
 import os
@@ -30,6 +31,15 @@ def safe_int(value, default=1, minimum=1, maximum=None):
         return default
 
 from compat import get_printer_service, get_nas_service, get_network_service
+
+
+def _is_valid_ip(ip: str) -> bool:
+    """IP-Adresse strikt validieren (nur IPv4, keine reservierten Adressen)."""
+    try:
+        addr = ipaddress.IPv4Address(ip)
+        return not addr.is_loopback and not addr.is_unspecified
+    except (ipaddress.AddressValueError, ValueError):
+        return False
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -121,7 +131,8 @@ def api_setup_scan_network():
         found = nas.scan_network_for_smb()
         return jsonify({"ok": True, "hosts": found})
     except Exception as e:
-        return jsonify({"ok": True, "hosts": [], "error": str(e)})
+        logger.warning("Netzwerk-Scan fehlgeschlagen: %s", e)
+        return jsonify({"ok": True, "hosts": [], "error": "Netzwerk-Scan fehlgeschlagen"})
 
 
 @app.route("/api/setup/list-shares", methods=["POST"])
@@ -133,7 +144,7 @@ def api_setup_list_shares():
     password = data.get("password", "")
     if not ip or not username:
         return jsonify({"ok": False, "error": "IP und Benutzername erforderlich"})
-    if not re.match(r"^[\d.]+$", ip):
+    if not _is_valid_ip(ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
     try:
         nas = get_nas_service()
@@ -144,7 +155,8 @@ def api_setup_list_shares():
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "error": "Zeitueberschreitung — Host nicht erreichbar"})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logger.warning("Freigaben-Abfrage fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "error": "Freigaben konnten nicht abgefragt werden"})
 
 
 @app.route("/api/setup/browse-share", methods=["POST"])
@@ -156,7 +168,7 @@ def api_setup_browse_share():
     path = data.get("path", "").strip()
     username = data.get("username", "").strip()
     password = data.get("password", "")
-    if not re.match(r"^[\d.]+$", ip):
+    if not _is_valid_ip(ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
     if not share or not re.match(r"^[\w\- ]+$", share):
         return jsonify({"ok": False, "error": "Ungueltiger Freigabename"})
@@ -169,7 +181,8 @@ def api_setup_browse_share():
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "error": "Zeitueberschreitung"})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logger.warning("Freigabe-Browse fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "error": "Freigabe konnte nicht durchsucht werden"})
 
 
 @app.route("/api/setup/mount-nas", methods=["POST"])
@@ -181,7 +194,7 @@ def api_setup_mount_nas():
     path = data.get("path", "").strip()
     username = data.get("username", "").strip()
     password = data.get("password", "")
-    if not re.match(r"^[\d.]+$", ip):
+    if not _is_valid_ip(ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
     if not share or not re.match(r"^[\w\- ]+$", share):
         return jsonify({"ok": False, "error": "Ungueltiger Freigabename"})
@@ -192,7 +205,8 @@ def api_setup_mount_nas():
             return jsonify(result)
         return jsonify(result)
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logger.warning("NAS-Verbindung fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "error": "NAS-Verbindung fehlgeschlagen"})
 
 
 @app.route("/api/setup/discover-printers", methods=["POST"])
@@ -204,7 +218,8 @@ def api_setup_discover_printers():
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "printers": [], "error": "Suche dauert zu lange — evtl. keine Netzwerkdrucker erreichbar"})
     except Exception as e:
-        return jsonify({"ok": False, "printers": [], "error": str(e)})
+        logger.warning("Drucker-Erkennung fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "printers": [], "error": "Drucker-Erkennung fehlgeschlagen"})
 
 
 @app.route("/api/setup/add-printer", methods=["POST"])
@@ -221,7 +236,8 @@ def api_setup_add_printer():
             return jsonify({"ok": False, "error": result})
         return jsonify({"ok": True, "name": result})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logger.warning("Drucker-Einrichtung fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "error": "Drucker konnte nicht eingerichtet werden"})
 
 
 @app.route("/api/setup/test-printers")
@@ -232,7 +248,8 @@ def api_setup_test_printers():
         printers = get_printers()
         return jsonify({"ok": True, "printers": list(printers.keys())})
     except Exception as e:
-        return jsonify({"ok": False, "printers": [], "error": str(e)})
+        logger.warning("Drucker-Liste fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "printers": [], "error": "Drucker konnten nicht abgefragt werden"})
 
 
 @app.route("/api/setup/save", methods=["POST"])
@@ -241,14 +258,22 @@ def api_setup_save():
     fax_dir = data.get("fax_dir", "").strip()
     if not fax_dir or not os.path.isdir(fax_dir):
         return jsonify({"ok": False, "error": "Ungueltiges Fax-Verzeichnis"})
+    # Newlines in fax_dir blockieren (.env-Injection)
+    if "\n" in fax_dir or "\r" in fax_dir:
+        return jsonify({"ok": False, "error": "Ungueltiges Fax-Verzeichnis"})
 
-    # .env schreiben
+    # .env mit Merge-Logik schreiben (bestehende Keys bewahren)
     env_path = Path(config.BASE_DIR) / ".env"
-    lines = [
-        f"FAX_WATCH_DIR={fax_dir}",
-        f"SECRET_KEY={config.SECRET_KEY}",
-    ]
-    env_path.write_text("\n".join(lines) + "\n")
+    with _env_lock:
+        existing = {}
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if "=" in line and not line.startswith("#"):
+                    key = line.split("=", 1)[0]
+                    existing[key] = line
+        existing["FAX_WATCH_DIR"] = f"FAX_WATCH_DIR={fax_dir}"
+        existing["SECRET_KEY"] = f"SECRET_KEY={config.SECRET_KEY}"
+        env_path.write_text("\n".join(existing.values()) + "\n")
 
     # Config im Speicher aktualisieren
     config.FAX_WATCH_DIR = fax_dir
@@ -424,7 +449,8 @@ def api_print_fax(fax_id):
         print_fax(fax["file_path"], printer_name, copies)
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error("Druckfehler fuer Fax %d: %s", fax_id, e)
+        return jsonify({"error": "Druckauftrag fehlgeschlagen"}), 500
 
 
 @app.route("/api/drucker")
@@ -434,7 +460,8 @@ def api_list_printers():
         printers = get_printers()
         return jsonify(printers)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.warning("Drucker-Abfrage fehlgeschlagen: %s", e)
+        return jsonify({"error": "Drucker konnten nicht abgefragt werden"}), 500
 
 
 @app.route("/api/fax/<int:fax_id>/kategorie", methods=["POST"])
@@ -546,7 +573,8 @@ def api_discover_printers():
     except subprocess.TimeoutExpired:
         return jsonify({"ok": False, "printers": [], "error": "Suche dauert zu lange"})
     except Exception as e:
-        return jsonify({"ok": False, "printers": [], "error": str(e)})
+        logger.warning("Drucker-Suche fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "printers": [], "error": "Drucker-Suche fehlgeschlagen"})
 
 
 @app.route("/api/drucker/hinzufuegen", methods=["POST"])
@@ -563,7 +591,8 @@ def api_add_printer():
             return jsonify({"ok": False, "error": result})
         return jsonify({"ok": True, "name": result})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logger.warning("Drucker-Einrichtung fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "error": "Drucker konnte nicht eingerichtet werden"})
 
 
 @app.route("/api/drucker/<name>", methods=["DELETE"])
@@ -575,7 +604,8 @@ def api_remove_printer(name):
             return jsonify({"ok": False, "error": error})
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logger.warning("Drucker-Entfernung fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "error": "Drucker konnte nicht entfernt werden"})
 
 
 @app.route("/api/drucker/<name>/test", methods=["POST"])
@@ -587,7 +617,8 @@ def api_test_printer(name):
             return jsonify({"ok": False, "error": error})
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logger.warning("Testseite fehlgeschlagen: %s", e)
+        return jsonify({"ok": False, "error": "Testseite konnte nicht gesendet werden"})
 
 
 # --- Einstellungen API ---
@@ -646,18 +677,22 @@ def _load_custom_categories():
         config.FAX_CATEGORIES.update(custom)
 
 
+_env_lock = threading.Lock()
+
+
 def _save_env_settings():
     """Archiv-Einstellungen in .env speichern."""
     env_path = Path(config.BASE_DIR) / ".env"
-    lines = []
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            if not line.startswith(("ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=", "DELETE_AFTER_DAYS=")):
-                lines.append(line)
-    lines.append(f"ARCHIVE_AFTER_DAYS={config.ARCHIVE_AFTER_DAYS}")
-    lines.append(f"FORCE_ARCHIVE_AFTER_DAYS={config.FORCE_ARCHIVE_AFTER_DAYS}")
-    lines.append(f"DELETE_AFTER_DAYS={config.DELETE_AFTER_DAYS}")
-    env_path.write_text("\n".join(lines) + "\n")
+    with _env_lock:
+        lines = []
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if not line.startswith(("ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=", "DELETE_AFTER_DAYS=")):
+                    lines.append(line)
+        lines.append(f"ARCHIVE_AFTER_DAYS={config.ARCHIVE_AFTER_DAYS}")
+        lines.append(f"FORCE_ARCHIVE_AFTER_DAYS={config.FORCE_ARCHIVE_AFTER_DAYS}")
+        lines.append(f"DELETE_AFTER_DAYS={config.DELETE_AFTER_DAYS}")
+        env_path.write_text("\n".join(lines) + "\n")
 
 
 # --- UDP Discovery ---
