@@ -458,7 +458,7 @@ def api_print_fax(fax_id):
         return jsonify({"ok": True})
     except Exception as e:
         logger.error("Druckfehler fuer Fax %d: %s", fax_id, e)
-        return jsonify({"error": f"Druckfehler: {e}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/drucker")

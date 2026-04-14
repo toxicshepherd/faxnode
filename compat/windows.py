@@ -43,7 +43,12 @@ class WindowsPrinterService(PrinterService):
             capture_output=True, encoding="oem", timeout=30
         )
         if r.returncode != 0:
-            raise RuntimeError(f"Druckfehler: {r.stderr.strip()}")
+            # SumatraPDF schreibt Fehler teils nach stdout, teils nach stderr
+            err = (r.stderr or r.stdout or "").strip()
+            raise RuntimeError(
+                err or f"SumatraPDF Exit-Code {r.returncode} — "
+                f"Drucker: {printer_name}, Datei: {file_path}"
+            )
         logger.info("Druckauftrag: %s -> %s (%d Kopien)", file_path, printer_name, copies)
         return 1  # Dummy Job-ID (SumatraPDF liefert keine echte)
 
