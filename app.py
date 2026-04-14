@@ -37,8 +37,7 @@ app.secret_key = config.SECRET_KEY
 
 def is_setup_done():
     """Pruefen ob die Ersteinrichtung abgeschlossen ist."""
-    env_file = Path(config.BASE_DIR) / ".env"
-    return env_file.exists() and os.path.getsize(env_file) > 0
+    return bool(config.FAX_WATCH_DIR) and os.path.isdir(config.FAX_WATCH_DIR)
 
 # --- SSE ---
 
