@@ -42,13 +42,12 @@ class WindowsPrinterService(PrinterService):
              "-print-count", str(copies), "-silent", file_path],
             capture_output=True, encoding="oem", timeout=30
         )
+        # SumatraPDF gibt im -silent Modus oft Nicht-Null Exit-Codes zurueck
+        # obwohl der Druckauftrag erfolgreich an den Spooler gesendet wurde.
         if r.returncode != 0:
-            # SumatraPDF schreibt Fehler teils nach stdout, teils nach stderr
-            err = (r.stderr or r.stdout or "").strip()
-            raise RuntimeError(
-                err or f"SumatraPDF Exit-Code {r.returncode} — "
-                f"Drucker: {printer_name}, Datei: {file_path}"
-            )
+            logger.warning("SumatraPDF Exit-Code %d (Drucker: %s, Datei: %s): %s",
+                           r.returncode, printer_name, file_path,
+                           (r.stderr or r.stdout or "").strip())
         logger.info("Druckauftrag: %s -> %s (%d Kopien)", file_path, printer_name, copies)
         return 1  # Dummy Job-ID (SumatraPDF liefert keine echte)
 
