@@ -4,6 +4,19 @@ import os
 from contextlib import contextmanager
 from config import DATABASE
 
+
+def _sanitize_fts_query(query: str) -> str:
+    """FTS5-Metazeichen escapen fuer sichere MATCH-Queries.
+
+    Wrapt jeden Term in Anfuehrungszeichen, sodass FTS5-Operatoren
+    (AND, OR, NOT, *, Klammern) als Literale behandelt werden.
+    """
+    query = query.replace('"', '""')
+    terms = query.split()
+    if not terms:
+        return '""'
+    return " ".join(f'"{t}"' for t in terms)
+
 SCHEMA = """
 -- Faxe: Kern-Tabelle
 CREATE TABLE IF NOT EXISTS faxes (
@@ -154,7 +167,7 @@ def get_faxes(status=None, category=None, archived=0, search=None, limit=100, of
                     WHERE f2.phone_number LIKE ? OR ab2.name LIKE ?
                 )
             """
-            params = [archived, search, f"%{search}%", f"%{search}%"]
+            params = [archived, _sanitize_fts_query(search), f"%{search}%", f"%{search}%"]
         else:
             query = """
                 SELECT f.*, ab.name as sender_name
@@ -393,7 +406,7 @@ def get_archive_count(search=None):
                        f.id IN (SELECT rowid FROM faxes_fts WHERE faxes_fts MATCH ?)
                        OR f.phone_number LIKE ? OR ab.name LIKE ?
                    )""",
-                (search, f"%{search}%", f"%{search}%")
+                (_sanitize_fts_query(search), f"%{search}%", f"%{search}%")
             ).fetchone()
         else:
             row = conn.execute(

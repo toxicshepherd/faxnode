@@ -22,7 +22,7 @@ case "$CMD" in
         # Alte FaxNode-Eintraege entfernen
         sed -i '\|'"$MOUNT_POINT"'|d' /etc/fstab
         # Neuen Eintrag hinzufuegen
-        echo "$SMB_PATH $MOUNT_POINT cifs credentials=/etc/samba/fax_creds,uid=$(id -u "$SUDO_USER"),gid=$(id -g "$SUDO_USER"),noperm,vers=1.0,_netdev 0 0" >> /etc/fstab
+        echo "$SMB_PATH $MOUNT_POINT cifs credentials=/etc/samba/fax_creds,uid=$(id -u "$SUDO_USER"),gid=$(id -g "$SUDO_USER"),noperm,_netdev 0 0" >> /etc/fstab
         echo "OK"
         ;;
 

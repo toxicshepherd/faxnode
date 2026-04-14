@@ -26,4 +26,7 @@ if __name__ == "__main__":
             from waitress import serve
             serve(app, host=config.HOST, port=config.PORT, threads=4)
     else:
-        app.run()
+        # Linux: normalerweise via Gunicorn gestartet (siehe faxnode.service)
+        # Fallback fuer direkten Start:
+        import config
+        app.run(host=config.HOST, port=config.PORT, debug=False)

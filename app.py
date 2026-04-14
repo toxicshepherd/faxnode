@@ -159,6 +159,8 @@ def api_setup_browse_share():
     password = data.get("password", "")
     if not re.match(r"^[\d.]+$", ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
+    if not share or not re.match(r"^[\w\- ]+$", share):
+        return jsonify({"ok": False, "error": "Ungueltiger Freigabename"})
     if path and not re.match(r"^[\w./ \\-]+$", path):
         return jsonify({"ok": False, "error": "Ungueltiger Pfad"})
     try:
@@ -182,6 +184,8 @@ def api_setup_mount_nas():
     password = data.get("password", "")
     if not re.match(r"^[\d.]+$", ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
+    if not share or not re.match(r"^[\w\- ]+$", share):
+        return jsonify({"ok": False, "error": "Ungueltiger Freigabename"})
     try:
         nas = get_nas_service()
         result = nas.connect_nas(ip, share, path, username, password)

@@ -45,14 +45,17 @@ class WindowsPrinterService(PrinterService):
         if r.returncode != 0:
             raise RuntimeError(f"Druckfehler: {r.stderr.strip()}")
         logger.info("Druckauftrag: %s -> %s (%d Kopien)", file_path, printer_name, copies)
-        return 0
+        return 1  # Dummy Job-ID (SumatraPDF liefert keine echte)
 
     def discover_printers(self) -> list[dict]:
         printers = self.get_printers()
         return [{"uri": name, "name": name} for name in printers]
 
     def add_printer(self, name: str, uri: str) -> tuple[bool, str]:
-        name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+        name = re.sub(r"[^a-zA-Z0-9_\- ]", "_", name)
+        # URI-Validierung: nur erlaubte Protokoll-URIs (verhindert PowerShell-Injection)
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://[\w.\-:/]+$", uri):
+            return False, f"Ungueltige Drucker-URI: {uri}"
         try:
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
@@ -66,7 +69,7 @@ class WindowsPrinterService(PrinterService):
             return False, str(e)
 
     def remove_printer(self, name: str) -> tuple[bool, str]:
-        name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+        name = re.sub(r"[^a-zA-Z0-9_\- ]", "_", name)
         try:
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
@@ -80,14 +83,15 @@ class WindowsPrinterService(PrinterService):
             return False, str(e)
 
     def test_printer(self, name: str) -> tuple[bool, str]:
-        name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
-        # Testseite via Windows-Druckdialog
+        name = re.sub(r"[^a-zA-Z0-9_\- ]", "_", name)
         try:
             r = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
                  f'rundll32 printui.dll,PrintUIEntry /k /n "{name}"'],
                 capture_output=True, text=True, timeout=15
             )
+            if r.returncode != 0:
+                return False, r.stderr.strip() or "Testseite fehlgeschlagen"
             return True, "Testseite gesendet"
         except Exception as e:
             return False, str(e)
@@ -113,36 +117,48 @@ class WindowsNasService(NasService):
                 found.append({"ip": ip, "is_gateway": ip == gw})
         return found
 
+    def _store_credentials(self, ip: str, username: str, password: str):
+        """Credentials im Windows Credential Manager speichern (nicht in Prozessliste sichtbar)."""
+        # Alte Credentials entfernen (Fehler ignorieren falls nicht vorhanden)
+        subprocess.run(
+            ["cmdkey", f"/delete:{ip}"],
+            capture_output=True, text=True, timeout=5
+        )
+        r = subprocess.run(
+            ["cmdkey", f"/add:{ip}", f"/user:{username}", f"/pass:{password}"],
+            capture_output=True, text=True, timeout=5
+        )
+        if r.returncode != 0:
+            logger.warning("cmdkey fehlgeschlagen: %s", r.stderr.strip())
+
     def list_shares(self, ip: str, username: str, password: str) -> list[dict]:
-        # net use fuer Authentifizierung, dann net view fuer Freigaben
-        try:
-            # Erst authentifizieren
-            subprocess.run(
-                ["net", "use", f"\\\\{ip}\\IPC$", password, f"/user:{username}"],
-                capture_output=True, text=True, timeout=10
-            )
-        except Exception:
-            pass
+        # Credentials sicher im Credential Manager speichern
+        self._store_credentials(ip, username, password)
 
         r = subprocess.run(
             ["net", "view", f"\\\\{ip}"],
             capture_output=True, text=True, timeout=10
         )
         shares = []
+        in_table = False
         for line in r.stdout.splitlines():
-            line = line.strip()
-            m = re.match(r"^(\S+)\s+Datenträger\s*(.*)$", line)
-            if not m:
-                # Englisches Windows
-                m = re.match(r"^(\S+)\s+Disk\s*(.*)$", line)
-            if m and not m.group(1).endswith("$"):
-                shares.append({"name": m.group(1), "comment": m.group(2).strip()})
+            stripped = line.strip()
+            if stripped.startswith("---"):
+                in_table = True
+                continue
+            if in_table and stripped:
+                # Leerzeile oder Statusmeldung beendet die Tabelle
+                if stripped.startswith("Der Befehl") or stripped.startswith("The command"):
+                    break
+                parts = stripped.split()
+                if len(parts) >= 2 and not parts[0].endswith("$"):
+                    shares.append({"name": parts[0], "comment": " ".join(parts[2:])})
         return shares
 
     def browse_share(self, ip: str, share: str, path: str,
                      username: str, password: str) -> dict:
-        # Authentifizierung sicherstellen
-        self._ensure_credentials(ip, share, username, password)
+        # Credentials sicher speichern
+        self._store_credentials(ip, username, password)
 
         unc_path = f"\\\\{ip}\\{share}"
         if path:
@@ -172,10 +188,12 @@ class WindowsNasService(NasService):
             capture_output=True, text=True, timeout=5
         )
 
-        # Persistente Verbindung herstellen
+        # Credentials sicher im Credential Manager speichern
+        self._store_credentials(ip, username, password)
+
+        # Persistente Verbindung herstellen (ohne Passwort auf der CLI)
         r = subprocess.run(
-            ["net", "use", unc_share, password,
-             f"/user:{username}", "/persistent:yes"],
+            ["net", "use", unc_share, "/persistent:yes"],
             capture_output=True, text=True, timeout=15
         )
         if r.returncode != 0:
@@ -197,17 +215,6 @@ class WindowsNasService(NasService):
         except Exception as e:
             return {"ok": False,
                     "error": f"Verbindung erfolgreich, aber Dateien nicht lesbar: {e}"}
-
-    def _ensure_credentials(self, ip: str, share: str, username: str, password: str):
-        """Sicherstellen dass UNC-Pfad authentifiziert ist."""
-        try:
-            subprocess.run(
-                ["net", "use", f"\\\\{ip}\\{share}", password,
-                 f"/user:{username}"],
-                capture_output=True, text=True, timeout=10
-            )
-        except Exception:
-            pass
 
 
 class WindowsNetworkService(NetworkService):
