@@ -142,9 +142,9 @@ class LinuxNasService(NasService):
     def connect_nas(self, ip: str, share: str, path: str,
                     username: str, password: str) -> dict:
         mount_point = "/mnt/nas/faxe"
+        # CIFS kann nur ganze Freigaben mounten, keine Unterordner.
+        # Der Unterordner wird innerhalb des Mount-Points verwendet.
         smb_path = f"//{ip}/{share}"
-        if path:
-            smb_path += f"/{path}"
 
         # 1. Credentials schreiben
         creds_content = f"username={username}\npassword={password}\n"
@@ -155,7 +155,7 @@ class LinuxNasService(NasService):
         if r.returncode != 0:
             return {"ok": False, "error": f"Credentials-Fehler: {r.stderr}"}
 
-        # 2. fstab Eintrag
+        # 2. fstab Eintrag (nur Freigabe, ohne Unterordner)
         r = subprocess.run(
             ["sudo", _SETUP_HELPER, "add-fstab", smb_path, mount_point],
             capture_output=True, text=True, timeout=5
@@ -171,22 +171,22 @@ class LinuxNasService(NasService):
         if r.returncode != 0:
             return {"ok": False, "error": f"Mount-Fehler: {r.stderr}"}
 
-        # 4. Pruefen ob Dateien lesbar sind
-        # Kurz warten damit der frische Mount vollstaendig bereit ist
-        # und keine stale file handles vom vorherigen Mount uebrig sind.
+        # 4. Fax-Verzeichnis bestimmen (Mount-Point + Unterordner)
+        fax_dir = os.path.join(mount_point, path) if path else mount_point
+
+        # 5. Pruefen ob Dateien lesbar sind
         import time
         time.sleep(1)
         try:
-            # Frischen Verzeichnis-Scan erzwingen (O_DIRECTORY bypass fuer stale caches)
-            fd = os.open(mount_point, os.O_RDONLY | os.O_DIRECTORY)
-            os.close(fd)
-            files = os.listdir(mount_point)
+            if not os.path.isdir(fax_dir):
+                return {"ok": False, "error": f"Unterordner '{path}' nicht gefunden auf der Freigabe"}
+            files = os.listdir(fax_dir)
             pdfs = [f for f in files if f.lower().endswith(".pdf")]
             if pdfs:
-                test_path = os.path.join(mount_point, pdfs[0])
+                test_path = os.path.join(fax_dir, pdfs[0])
                 with open(test_path, "rb") as f:
                     f.read(10)
-            return {"ok": True, "fax_dir": mount_point, "pdf_count": len(pdfs)}
+            return {"ok": True, "fax_dir": fax_dir, "pdf_count": len(pdfs)}
         except Exception as e:
             return {"ok": False, "error": f"Mount erfolgreich, aber Dateien nicht lesbar: {e}"}
 
