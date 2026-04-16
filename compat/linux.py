@@ -172,7 +172,14 @@ class LinuxNasService(NasService):
             return {"ok": False, "error": f"Mount-Fehler: {r.stderr}"}
 
         # 4. Pruefen ob Dateien lesbar sind
+        # Kurz warten damit der frische Mount vollstaendig bereit ist
+        # und keine stale file handles vom vorherigen Mount uebrig sind.
+        import time
+        time.sleep(1)
         try:
+            # Frischen Verzeichnis-Scan erzwingen (O_DIRECTORY bypass fuer stale caches)
+            fd = os.open(mount_point, os.O_RDONLY | os.O_DIRECTORY)
+            os.close(fd)
             files = os.listdir(mount_point)
             pdfs = [f for f in files if f.lower().endswith(".pdf")]
             if pdfs:

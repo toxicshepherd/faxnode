@@ -9,8 +9,7 @@ BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
 
 # NAS-Verzeichnis wo die FritzBox Faxe speichert
-_DEFAULT_FAX_DIR = "" if sys.platform == "win32" else "/mnt/nas/faxe"
-FAX_WATCH_DIR = os.environ.get("FAX_WATCH_DIR", _DEFAULT_FAX_DIR)
+FAX_WATCH_DIR = os.environ.get("FAX_WATCH_DIR", "")
 
 # Poppler-Pfad fuer pdf2image (Windows: tools/poppler/Library/bin)
 POPPLER_PATH = os.environ.get("POPPLER_PATH", "")

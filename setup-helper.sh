@@ -29,8 +29,9 @@ case "$CMD" in
     mount)
         MOUNT_POINT="$1"
         mkdir -p "$MOUNT_POINT"
-        # Erst unmounten falls schon gemountet
-        umount -l "$MOUNT_POINT" 2>/dev/null || true
+        # Erst unmounten falls schon gemountet (force + lazy fuer stale mounts)
+        umount -f -l "$MOUNT_POINT" 2>/dev/null || true
+        sleep 1
         systemctl daemon-reload
         mount "$MOUNT_POINT"
         echo "OK"

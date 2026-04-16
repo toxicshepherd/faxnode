@@ -47,8 +47,23 @@ app.secret_key = config.SECRET_KEY
 
 
 def is_setup_done():
-    """Pruefen ob die Ersteinrichtung abgeschlossen ist."""
-    return bool(config.FAX_WATCH_DIR) and os.path.isdir(config.FAX_WATCH_DIR)
+    """Pruefen ob die Ersteinrichtung abgeschlossen ist.
+
+    Prueft ob FAX_WATCH_DIR explizit in .env gesetzt wurde (nicht nur Default).
+    Vermeidet os.path.isdir() auf potentiell stale CIFS-Mounts, da diese den
+    gesamten Prozess minutenlang blockieren koennen.
+    """
+    if not config.FAX_WATCH_DIR:
+        return False
+    env_path = os.path.join(config.BASE_DIR, ".env")
+    try:
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith("FAX_WATCH_DIR="):
+                    return True
+    except FileNotFoundError:
+        pass
+    return False
 
 # --- SSE ---
 
@@ -177,7 +192,7 @@ def api_setup_browse_share():
     password = data.get("password", "")
     if not _is_valid_ip(ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
-    if not share or not re.match(r"^[\w\- ]+$", share):
+    if not share or not re.match(r"^[\w.\- ]+$", share):
         return jsonify({"ok": False, "error": "Ungueltiger Freigabename"})
     if path and not re.match(r"^[\w./ \\-]+$", path):
         return jsonify({"ok": False, "error": "Ungueltiger Pfad"})
@@ -203,7 +218,7 @@ def api_setup_mount_nas():
     password = data.get("password", "")
     if not _is_valid_ip(ip):
         return jsonify({"ok": False, "error": "Ungueltige IP-Adresse"})
-    if not share or not re.match(r"^[\w\- ]+$", share):
+    if not share or not re.match(r"^[\w.\- ]+$", share):
         return jsonify({"ok": False, "error": "Ungueltiger Freigabename"})
     try:
         nas = get_nas_service()

@@ -60,7 +60,6 @@ echo "[4/7] Verzeichnisse vorbereiten..."
 mkdir -p "$INSTALL_DIR/data"
 mkdir -p "$INSTALL_DIR/static/thumbnails"
 mkdir -p "$INSTALL_DIR/static/sounds"
-sudo mkdir -p /mnt/nas/faxe
 echo "      Fertig."
 
 # 5. SSL-Zertifikate generieren
