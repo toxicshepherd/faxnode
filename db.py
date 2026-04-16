@@ -222,12 +222,15 @@ def get_fax(fax_id):
 
 
 def insert_fax(filename, phone_number, received_at, file_path, file_size, page_count=1, category="sonstiges"):
-    """Neues Fax einfuegen."""
+    """Neues Fax einfuegen oder Dateipfad aktualisieren."""
     with db_connection() as conn:
         cursor = conn.execute(
-            """INSERT OR IGNORE INTO faxes
+            """INSERT INTO faxes
                (filename, phone_number, received_at, file_path, file_size, page_count, category)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(filename) DO UPDATE SET
+                   file_path = excluded.file_path,
+                   file_size = excluded.file_size""",
             (filename, phone_number, received_at, file_path, file_size, page_count, category)
         )
         return cursor.lastrowid if cursor.rowcount > 0 else None
