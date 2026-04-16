@@ -9,9 +9,10 @@
 
 <div class="detail-layout">
     <div class="detail-pdf">
-        <object data="{{ url_for('api_serve_pdf', fax_id=fax.id) }}" type="application/pdf" width="100%" height="100%">
-            <p>PDF kann nicht angezeigt werden. <a href="{{ url_for('api_serve_pdf', fax_id=fax.id) }}" target="_blank">PDF herunterladen</a></p>
-        </object>
+        <iframe src="{{ url_for('api_serve_pdf', fax_id=fax.id) }}" width="100%" height="100%" style="border:none;"></iframe>
+        <div class="pdf-fallback" style="text-align:center;padding:1rem;">
+            <a href="{{ url_for('api_serve_pdf', fax_id=fax.id) }}" target="_blank" class="btn btn-sm">PDF herunterladen</a>
+        </div>
     </div>
     <div class="detail-sidebar">
         <div class="detail-meta card">
