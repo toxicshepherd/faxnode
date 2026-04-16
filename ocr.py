@@ -27,6 +27,11 @@ def _ocr_worker():
                 continue
 
             file_path = fax["file_path"]
+            if not os.path.isfile(file_path):
+                logger.info("Fax %d uebersprungen: Datei nicht mehr vorhanden (%s)", fax_id, fax["filename"])
+                db.update_fax_ocr(fax_id, None, ocr_done=-1)
+                continue
+
             from pdf2image import convert_from_path
             import pytesseract
 
