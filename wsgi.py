@@ -3,6 +3,20 @@
 Gunicorn auf Linux, Waitress auf Windows.
 """
 import sys
+
+# gevent-Monkey-Patching als ALLERERSTES, noch vor dem App-Import.
+# Gunicorn's gevent-Worker patched zwar selbst, aber nur nach Fork —
+# wenn eine Modul-Level-Initialisierung in app.py (z.B. das
+# Discovery-Thread-Start) blockierendes I/O macht, wuerde der
+# Event-Loop stehen. Defensiv & idempotent: wenn gevent nicht
+# installiert ist (z.B. Windows), still skippen.
+if sys.platform != "win32":
+    try:
+        from gevent import monkey
+        monkey.patch_all()
+    except ImportError:
+        pass
+
 from app import app
 
 if __name__ == "__main__":

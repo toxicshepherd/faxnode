@@ -770,16 +770,19 @@ def api_save_default_printer():
     return jsonify({"ok": True})
 
 
+BULK_MAX_IDS = 500
+
+
 @app.route("/api/fax/bulk", methods=["POST"])
 def api_bulk_action():
-    """Bulk-Aktion auf mehrere Faxe anwenden."""
+    """Bulk-Aktion auf mehrere Faxe anwenden (max BULK_MAX_IDS)."""
     data = request.get_json() or {}
     ids = data.get("ids", [])
     action = data.get("action", "")
     if not isinstance(ids, list) or not ids:
         return jsonify({"ok": False, "error": "Keine Faxe ausgewaehlt"}), 400
     try:
-        ids = [int(i) for i in ids]
+        ids = [int(i) for i in ids][:BULK_MAX_IDS]
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "Ungueltige IDs"}), 400
 
@@ -788,12 +791,13 @@ def api_bulk_action():
         if status not in config.FAX_STATUSES:
             return jsonify({"ok": False, "error": "Ungueltiger Status"}), 400
         affected = db.bulk_update_status(ids, status)
-        broadcast("bulk_status_changed", {"ids": ids, "status": status})
+        # SSE-Payload klein halten — Clients refetchen bei Bedarf.
+        broadcast("bulk_status_changed", {"count": affected, "status": status, "ids": ids})
         return jsonify({"ok": True, "affected": affected})
 
     if action == "archive":
         affected = db.bulk_archive(ids)
-        broadcast("bulk_archived", {"ids": ids})
+        broadcast("bulk_archived", {"count": affected, "ids": ids})
         return jsonify({"ok": True, "affected": affected})
 
     return jsonify({"ok": False, "error": "Unbekannte Aktion"}), 400
@@ -915,6 +919,16 @@ def _discovery_responder():
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # SO_REUSEPORT erlaubt es mehreren Prozessen (Worker) parallel
+        # zu binden, falls spaeter mal -w >1 genutzt wird.
+        if hasattr(socket, "SO_REUSEPORT"):
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except OSError:
+                pass
+        # Timeout, damit der Thread auf Shutdown reagieren koennte und
+        # unter gevent nicht ohne cooperative I/O festhaengt.
+        sock.settimeout(1.0)
         sock.bind(("0.0.0.0", discovery_port))
         logger.info("UDP-Discovery lauscht auf Port %d", discovery_port)
         while True:
@@ -928,6 +942,8 @@ def _discovery_responder():
                         "version": "1.1",
                     }, ensure_ascii=False).encode()
                     sock.sendto(response, addr)
+            except socket.timeout:
+                continue
             except Exception as e:
                 logger.warning("UDP-Discovery Paket-Fehler: %s", e)
     except Exception as e:

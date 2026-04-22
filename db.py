@@ -13,14 +13,15 @@ def _escape_like(value: str) -> str:
 def _sanitize_fts_query(query: str) -> str:
     """FTS5-Metazeichen escapen fuer sichere MATCH-Queries.
 
-    Wrapt jeden Term in Anfuehrungszeichen, sodass FTS5-Operatoren
-    (AND, OR, NOT, *, Klammern) als Literale behandelt werden.
+    Wrapt jeden Term in Anfuehrungszeichen und haengt * fuer Praefix-
+    Matching an, sodass "apo" auch "Apotheke" trifft. FTS5-Operatoren
+    (AND, OR, NOT, Klammern) werden dabei als Literale behandelt.
     """
     query = query.replace('"', '""')
     terms = query.split()
     if not terms:
         return '""'
-    return " ".join(f'"{t}"' for t in terms)
+    return " ".join(f'"{t}"*' for t in terms)
 
 SCHEMA = """
 -- Faxe: Kern-Tabelle
@@ -109,9 +110,13 @@ CREATE INDEX IF NOT EXISTS idx_print_rules_phone ON print_rules(phone_number);
 def get_db():
     """Erstelle eine neue DB-Verbindung mit WAL-Modus."""
     os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
-    conn = sqlite3.connect(DATABASE)
+    # check_same_thread=False: unter gevent wandert eine Verbindung
+    # zwischen Greenlets. WAL + busy_timeout=5000 verhindert
+    # SQLITE_BUSY, wenn Watcher + Web-Request gleichzeitig schreiben.
+    conn = sqlite3.connect(DATABASE, check_same_thread=False, timeout=5.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA cache_size=-8000")
