@@ -67,8 +67,17 @@ def set_security_headers(response):
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if request.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
+        # Thumbnails und PDFs sind per fax_id unveraenderlich → aggressiv cachen.
+        if "/thumbnail" in request.path or "/pdf" in request.path:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return send_file(_static_dir / "favicon.ico", mimetype="image/x-icon")
 
 
 @app.errorhandler(404)
