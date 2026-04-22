@@ -81,10 +81,14 @@ def _build_payload(title: str, message: str, level: str) -> dict:
 
 def _post(url: str, payload: dict) -> None:
     data = json.dumps(payload).encode("utf-8")
+    # Discord/Cloudflare blockiert den Default-UA "Python-urllib/x.y" mit 403.
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "FaxNode/1.1 (+https://github.com/toxicshepherd/faxnode)",
+        },
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=10) as resp:
