@@ -1,4 +1,18 @@
 """FaxNode – Flask App."""
+# gevent-Monkey-Patching doppelt-defensiv: Wenn wsgi.py als Entry
+# genutzt wird, ist bereits gepatched und das hier ist ein No-Op
+# (monkey.patch_all ist idempotent). Wenn Gunicorn direkt app:app
+# laedt, greift der Patch hier — sonst waeren sqlite/socket/subprocess
+# unter dem gevent-Worker blockierend.
+import sys as _sys
+if _sys.platform != "win32":
+    try:
+        from gevent import monkey as _monkey
+        if not _monkey.is_module_patched("socket"):
+            _monkey.patch_all()
+    except ImportError:
+        pass
+
 import ipaddress
 import json
 import logging
@@ -345,18 +359,17 @@ def api_setup_save():
     if "\n" in fax_dir or "\r" in fax_dir or "\n" in discord_webhook or "\r" in discord_webhook:
         return jsonify({"ok": False, "error": "Ungueltige Eingabe"})
 
+    # discord_webhook wird immer geschrieben — leer = bewusst loeschen.
     updates = {
         "FAX_WATCH_DIR": fax_dir,
         "SECRET_KEY": config.SECRET_KEY,
+        "DISCORD_WEBHOOK_URL": discord_webhook,
     }
-    if discord_webhook:
-        updates["DISCORD_WEBHOOK_URL"] = discord_webhook
     _env_write(updates)
 
     # Config im Speicher aktualisieren
     config.FAX_WATCH_DIR = fax_dir
-    if discord_webhook:
-        config.DISCORD_WEBHOOK_URL = discord_webhook
+    config.DISCORD_WEBHOOK_URL = discord_webhook
 
     # DB initialisieren und Hintergrund-Services starten (nur im primaeren Worker)
     db.init_db()
@@ -795,9 +808,14 @@ def api_bulk_action():
     if not isinstance(ids, list) or not ids:
         return jsonify({"ok": False, "error": "Keine Faxe ausgewaehlt"}), 400
     try:
-        ids = [int(i) for i in ids][:BULK_MAX_IDS]
+        ids = [int(i) for i in ids]
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "Ungueltige IDs"}), 400
+    if len(ids) > BULK_MAX_IDS:
+        return jsonify({
+            "ok": False,
+            "error": f"Maximal {BULK_MAX_IDS} Faxe pro Bulk-Aktion erlaubt (erhalten: {len(ids)})"
+        }), 400
 
     if action == "status":
         status = data.get("value")

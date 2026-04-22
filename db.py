@@ -232,8 +232,10 @@ def insert_fax(filename, phone_number, received_at, file_path, file_size, page_c
     Rueckgabe: fax_id nur bei tatsaechlichem INSERT (neues Fax). Bei
     bereits existierendem Eintrag wird der Pfad aktualisiert, aber
     None zurueckgegeben — so koennen Callers (Watcher vs. Polling)
-    race-safe erkennen, ob sie weiterverarbeiten duerfen (OCR,
-    Notification, Auto-Print).
+    erkennen, ob sie weiterverarbeiten duerfen (OCR, Notification,
+    Auto-Print). Innerhalb einer Connection sind die beiden
+    Statements in einer Transaktion; zwischen parallelen Connections
+    schuetzt das SQLite-Unique-Constraint auf filename.
     """
     with db_connection() as conn:
         cursor = conn.execute(

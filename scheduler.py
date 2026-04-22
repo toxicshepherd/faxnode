@@ -74,12 +74,21 @@ def _scheduler_loop():
     schedule.every().hour.at(":00").do(auto_archive)
     schedule.every().hour.at(":30").do(auto_delete)
 
-    # Einmal direkt beim Start ausfuehren
+    # Initial-Run pro Tag nur einmal, damit Crash-Loops nicht
+    # tausendfach DELETE/ARCHIVE feuern. Marker-Datei unter data/.
+    marker = os.path.join(os.path.dirname(config.DATABASE), ".scheduler_last_run")
     try:
-        auto_archive()
-        auto_delete()
-    except Exception as e:
-        logger.error("Fehler beim initialen Scheduler-Lauf: %s", e)
+        last_ts = os.path.getmtime(marker) if os.path.exists(marker) else 0
+    except OSError:
+        last_ts = 0
+    if time.time() - last_ts > 3600:  # erst nach 1h wieder
+        try:
+            auto_archive()
+            auto_delete()
+            with open(marker, "w") as f:
+                f.write("")
+        except Exception as e:
+            logger.error("Fehler beim initialen Scheduler-Lauf: %s", e)
 
     while True:
         try:

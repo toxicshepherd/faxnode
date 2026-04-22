@@ -55,14 +55,14 @@
         <label class="fax-card-select" onclick="event.stopPropagation();">
             <input type="checkbox" class="bulk-check" data-fax-id="{{ fax.id }}" onchange="bulkUpdateCount()">
         </label>
-        <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-thumb">
+        <a href="{{ url_for('fax_detail', fax_id=fax.id, status=current_status or None, category=current_category or None) }}" class="fax-card-thumb">
             {% if fax.thumbnail_path %}
             <img src="{{ url_for('static', filename='thumbnails/' ~ fax.id ~ '.png') }}" alt="" loading="lazy" onerror="this.outerHTML='<div class=\'thumb-placeholder\'>PDF</div>'">
             {% else %}
             <div class="thumb-placeholder">{% if fax.ocr_done == 0 %}...{% else %}PDF{% endif %}</div>
             {% endif %}
         </a>
-        <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-content">
+        <a href="{{ url_for('fax_detail', fax_id=fax.id, status=current_status or None, category=current_category or None) }}" class="fax-card-content">
             <div class="fax-card-header">
                 <span class="fax-sender">{{ fax.sender_name or fax.phone_number }}</span>
                 {% if fax.printed %}<span class="print-indicator" title="Gedruckt{% if fax.printed_by %} auf {{ fax.printed_by }}{% endif %}">&#9113;</span>{% endif %}
@@ -118,6 +118,14 @@ var _status = {{ current_status|tojson if current_status else 'null' }};
 var _category = {{ current_category|tojson if current_category else 'null' }};
 var _search = {{ search|tojson }};
 
+function _detailQuery() {
+    var p = new URLSearchParams();
+    if (_status) p.set('status', _status);
+    if (_category) p.set('category', _category);
+    var s = p.toString();
+    return s ? '?' + s : '';
+}
+
 function renderFaxCard(f) {
     var sender = f.sender_name || f.phone_number;
     var catLabel = _categories[f.category] || 'Sonstiges';
@@ -142,8 +150,8 @@ function renderFaxCard(f) {
     return '<div class="fax-card-row" data-fax-id="' + f.id + '">' +
         '<label class="fax-card-select" onclick="event.stopPropagation();">' +
         '<input type="checkbox" class="bulk-check" data-fax-id="' + f.id + '" onchange="bulkUpdateCount()"></label>' +
-        '<a href="/faxe/' + f.id + '" class="fax-card-thumb">' + thumb + '</a>' +
-        '<a href="/faxe/' + f.id + '" class="fax-card-content">' +
+        '<a href="/faxe/' + f.id + _detailQuery() + '" class="fax-card-thumb">' + thumb + '</a>' +
+        '<a href="/faxe/' + f.id + _detailQuery() + '" class="fax-card-content">' +
         '<div class="fax-card-header"><span class="fax-sender">' + escapeHtml(sender) + '</span>' +
         printInd +
         '<span class="cat-badge cat-' + f.category + '">' + escapeHtml(catLabel) + '</span></div>' +

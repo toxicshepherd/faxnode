@@ -9,6 +9,7 @@ import logging
 import queue
 import socket
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -98,9 +99,27 @@ def _post(url: str, payload: dict) -> None:
 def _worker_loop() -> None:
     while True:
         item = _q.get()
+        payload = _build_payload(item["title"], item["message"], item["level"])
         try:
-            payload = _build_payload(item["title"], item["message"], item["level"])
             _post(item["url"], payload)
+        except urllib.error.HTTPError as e:
+            # Discord-Rate-Limit: Retry-After respektieren und
+            # den Job erneut zustellen.
+            if e.code == 429:
+                retry_after = 1.0
+                try:
+                    retry_after = float(e.headers.get("Retry-After", "1"))
+                except (TypeError, ValueError):
+                    pass
+                retry_after = max(0.5, min(retry_after, 60.0))
+                logger.warning("Discord Rate-Limit, warte %.1fs", retry_after)
+                time.sleep(retry_after)
+                try:
+                    _post(item["url"], payload)
+                except Exception as e2:
+                    logger.warning("Discord-Retry fehlgeschlagen: %s", e2)
+            else:
+                logger.warning("Discord-Webhook HTTP %s: %s", e.code, e)
         except Exception as e:
             logger.warning("Discord-Webhook fehlgeschlagen: %s", e)
 

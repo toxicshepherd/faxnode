@@ -86,6 +86,18 @@ def process_file(file_path):
             return
         _known_files.add(filename)
 
+    try:
+        _process_file_inner(file_path, filename)
+    except Exception as e:
+        # Bei Fehler aus dem known-Set entfernen, damit der naechste
+        # Sync-Lauf eine Chance auf Nachholen hat statt die Datei
+        # dauerhaft zu ueberspringen.
+        with _known_files_lock:
+            _known_files.discard(filename)
+        logger.exception("Fehler beim Verarbeiten von %s: %s", filename, e)
+
+
+def _process_file_inner(file_path, filename):
     parsed = parse_filename(filename)
     if not parsed:
         logger.warning("Dateiname passt nicht zum FritzBox-Format: %s", filename)
