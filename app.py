@@ -138,7 +138,7 @@ def events():
             yield "event: connected\ndata: {}\n\n"
             while _time.monotonic() - start < max_age:
                 try:
-                    payload = q.get(timeout=30)
+                    payload = q.get(timeout=5)
                     yield payload
                 except queue.Empty:
                     yield ": keepalive\n\n"

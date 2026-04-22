@@ -91,7 +91,7 @@ Type=simple
 User=$USER
 Group=$USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 1 --threads 4 -b 0.0.0.0:$PORT --certfile $INSTALL_DIR/certs/server.crt --keyfile $INSTALL_DIR/certs/server.key --timeout 120 wsgi:app
+ExecStart=$INSTALL_DIR/venv/bin/gunicorn -k gthread -w 2 --threads 8 -b 0.0.0.0:$PORT --certfile $INSTALL_DIR/certs/server.crt --keyfile $INSTALL_DIR/certs/server.key --timeout 120 wsgi:app
 Restart=on-failure
 RestartSec=10
 
