@@ -105,13 +105,15 @@ sudo systemctl restart faxnode.service
 echo "      Fertig."
 
 # Fertig
-IP=$(hostname -I | awk '{print $1}')
+mapfile -t ALL_IPS < <(hostname -I | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
 echo ""
 echo "  ══════════════════════════════════════"
 echo "  FaxNode laeuft!"
 echo ""
 echo "  Oeffne im Browser:"
-echo "  https://$IP:$PORT"
+for ip in "${ALL_IPS[@]}"; do
+    echo "  https://$ip:$PORT"
+done
 echo ""
 echo "  Windows-Clients: FaxNode-Setup.exe"
 echo "  installieren und starten."
