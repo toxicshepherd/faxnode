@@ -61,7 +61,7 @@ def inject_static_version():
 
 @app.after_request
 def set_security_headers(response):
-    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     if request.is_secure:
