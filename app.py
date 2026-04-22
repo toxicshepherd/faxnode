@@ -64,7 +64,20 @@ def inject_static_version():
 def set_security_headers(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # X-XSS-Protection ist deprecated (Chromium hat's entfernt). CSP
+    # schuetzt besser: default-src 'self' blockt externe Scripts; die
+    # fonts.googleapis.com-Verbindung im base.html muss explizit
+    # erlaubt werden; PDF-iframe mit frame-src 'self'.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "script-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "frame-src 'self'; "
+        "frame-ancestors 'self'; "
+        "object-src 'none'"
+    )
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if request.path.startswith("/api/"):
@@ -137,7 +150,7 @@ def events():
     """SSE-Stream fuer Live-Updates."""
     def stream():
         import time as _time
-        q = queue.Queue(maxsize=50)
+        q = queue.Queue(maxsize=200)
         with _sse_lock:
             _sse_listeners.append(q)
         # Maximale Verbindungsdauer (5 Min). Der Client (EventSource)
@@ -405,7 +418,14 @@ def fax_detail(fax_id):
     if not fax:
         abort(404)
     notes = db.get_notes(fax_id)
-    neighbors = db.get_neighbor_ids(fax_id)
+    # Filter aus dem Query-String uebernehmen — wenn der User aus der
+    # Liste mit z.B. ?category=rezept kommt, soll das Prefetch die
+    # gleichen Nachbarn haben wie die Navigation.
+    neighbors = db.get_neighbor_ids(
+        fax_id,
+        status=request.args.get("status") or None,
+        category=request.args.get("category") or None,
+    )
     return render_template(
         "fax_detail.html",
         fax=fax,

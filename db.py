@@ -481,23 +481,35 @@ def get_fax_count_by_category(archived=0):
         return {row["category"]: row["cnt"] for row in rows}
 
 
-def get_neighbor_ids(fax_id):
+def get_neighbor_ids(fax_id, status=None, category=None):
     """IDs des vorigen/naechsten Faxes in chronologischer Reihenfolge.
 
-    Bleibt im selben archived-Bucket wie das aktuelle Fax. Rueckgabe:
-    dict mit prev/next — None wenn am Rand.
+    Optional auf denselben Status-/Kategorie-Filter beschraenken wie
+    die Listen-Ansicht — damit der PDF-Preload im Detail-View die
+    erwartete Navigation respektiert. Bleibt zudem im selben
+    archived-Bucket wie das aktuelle Fax.
     """
     with db_connection() as conn:
         cur = conn.execute("SELECT received_at, archived FROM faxes WHERE id = ?", (fax_id,)).fetchone()
         if not cur:
             return {"prev": None, "next": None}
+        where_extra = ""
+        params_extra = []
+        if status:
+            where_extra += " AND status = ?"
+            params_extra.append(status)
+        if category:
+            where_extra += " AND category = ?"
+            params_extra.append(category)
         prev_row = conn.execute(
-            "SELECT id FROM faxes WHERE archived = ? AND received_at < ? ORDER BY received_at DESC LIMIT 1",
-            (cur["archived"], cur["received_at"])
+            f"SELECT id FROM faxes WHERE archived = ? AND received_at < ?{where_extra} "
+            "ORDER BY received_at DESC LIMIT 1",
+            [cur["archived"], cur["received_at"], *params_extra]
         ).fetchone()
         next_row = conn.execute(
-            "SELECT id FROM faxes WHERE archived = ? AND received_at > ? ORDER BY received_at ASC LIMIT 1",
-            (cur["archived"], cur["received_at"])
+            f"SELECT id FROM faxes WHERE archived = ? AND received_at > ?{where_extra} "
+            "ORDER BY received_at ASC LIMIT 1",
+            [cur["archived"], cur["received_at"], *params_extra]
         ).fetchone()
         return {
             "prev": prev_row["id"] if prev_row else None,

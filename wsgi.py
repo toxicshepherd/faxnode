@@ -40,7 +40,15 @@ if __name__ == "__main__":
             from waitress import serve
             serve(app, host=config.HOST, port=config.PORT, threads=4)
     else:
-        # Linux: normalerweise via Gunicorn gestartet (siehe faxnode.service)
-        # Fallback fuer direkten Start:
-        import config
-        app.run(host=config.HOST, port=config.PORT, debug=False)
+        # Linux: MUSS via Gunicorn mit SSL gestartet werden (siehe
+        # faxnode.service). Ein direkter app.run()-Start haette HTTP
+        # ohne TLS auf 0.0.0.0 → Patientendaten im Klartext.
+        import sys as _sys
+        print(
+            "FEHLER: Unter Linux bitte Gunicorn verwenden:\n"
+            "  venv/bin/gunicorn -k gevent -w 1 --worker-connections 1000 "
+            "-b 0.0.0.0:9741 --certfile certs/server.crt "
+            "--keyfile certs/server.key wsgi:app",
+            file=_sys.stderr,
+        )
+        _sys.exit(1)

@@ -69,8 +69,10 @@ def auto_delete():
 
 def _scheduler_loop():
     """Scheduler-Thread: fuehrt geplante Aufgaben aus."""
-    schedule.every().hour.do(auto_archive)
-    schedule.every().hour.do(auto_delete)
+    # Um 30 Minuten versetzen, damit die beiden Jobs nicht zeitgleich
+    # dieselbe DB-Verbindung blockieren.
+    schedule.every().hour.at(":00").do(auto_archive)
+    schedule.every().hour.at(":30").do(auto_delete)
 
     # Einmal direkt beim Start ausfuehren
     try:
