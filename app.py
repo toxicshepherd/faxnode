@@ -770,6 +770,35 @@ def api_save_default_printer():
     return jsonify({"ok": True})
 
 
+@app.route("/api/fax/bulk", methods=["POST"])
+def api_bulk_action():
+    """Bulk-Aktion auf mehrere Faxe anwenden."""
+    data = request.get_json() or {}
+    ids = data.get("ids", [])
+    action = data.get("action", "")
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"ok": False, "error": "Keine Faxe ausgewaehlt"}), 400
+    try:
+        ids = [int(i) for i in ids]
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Ungueltige IDs"}), 400
+
+    if action == "status":
+        status = data.get("value")
+        if status not in config.FAX_STATUSES:
+            return jsonify({"ok": False, "error": "Ungueltiger Status"}), 400
+        affected = db.bulk_update_status(ids, status)
+        broadcast("bulk_status_changed", {"ids": ids, "status": status})
+        return jsonify({"ok": True, "affected": affected})
+
+    if action == "archive":
+        affected = db.bulk_archive(ids)
+        broadcast("bulk_archived", {"ids": ids})
+        return jsonify({"ok": True, "affected": affected})
+
+    return jsonify({"ok": False, "error": "Unbekannte Aktion"}), 400
+
+
 @app.route("/api/einstellungen/discord", methods=["GET"])
 def api_get_discord():
     """Aktuelle Discord-Webhook-URL zurueckgeben."""

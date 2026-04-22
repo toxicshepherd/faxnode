@@ -161,6 +161,29 @@ es.addEventListener('fax_printed', function(e) {
     }
 });
 
+es.addEventListener('bulk_status_changed', function(e) {
+    var d = JSON.parse(e.data);
+    (d.ids || []).forEach(function(id) {
+        document.querySelectorAll('.status-btns[data-fax-id="' + id + '"]').forEach(function(container) {
+            container.querySelectorAll('.status-btn').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.status === d.status);
+            });
+        });
+    });
+    fetch('/api/unread').then(function(r) { return r.json(); }).then(function(u) {
+        _unreadCount = u.count; updateTabTitle();
+    });
+});
+
+es.addEventListener('bulk_archived', function(e) {
+    var d = JSON.parse(e.data);
+    if (location.pathname === '/archiv') return;
+    (d.ids || []).forEach(function(id) {
+        var card = document.querySelector('.fax-card-row[data-fax-id="' + id + '"]');
+        if (card) card.remove();
+    });
+});
+
 es.addEventListener('fax_archived', function(e) {
     var d = JSON.parse(e.data);
     var card = document.querySelector('.fax-card-row[data-fax-id="' + d.fax_id + '"]');

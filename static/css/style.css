@@ -300,7 +300,7 @@ a { color: var(--accent); text-decoration: none; }
 /* Fax Card Row (with thumbnail) */
 .fax-card-row {
     display: grid;
-    grid-template-columns: 56px 1fr;
+    grid-template-columns: 24px 56px 1fr;
     grid-template-rows: auto auto;
     gap: 0 1rem;
     background: var(--bg-elevated);
@@ -308,6 +308,28 @@ a { color: var(--accent); text-decoration: none; }
     border-radius: var(--radius);
     padding: 0.875rem 1.125rem;
     transition: var(--transition);
+}
+.fax-card-select {
+    grid-row: 1 / span 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.fax-card-select input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+
+.bulk-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    background: var(--bg-elevated);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 .fax-card-row:hover { border-color: var(--accent); }
 .fax-card-row.kbd-focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }

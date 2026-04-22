@@ -35,10 +35,26 @@
     {% endfor %}
 </div>
 
+<div id="bulk-toolbar" class="bulk-toolbar" style="display:none;">
+    <span id="bulk-count" class="mono-sm">0 ausgewaehlt</span>
+    <select id="bulk-status" class="status-select">
+        <option value="">Status setzen...</option>
+        {% for key, label in statuses.items() %}
+        <option value="{{ key }}">{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button class="btn btn-sm" onclick="bulkApply('status')">Anwenden</button>
+    <button class="btn btn-sm btn-ghost" onclick="bulkApply('archive')">Archivieren</button>
+    <button class="btn btn-sm btn-ghost" onclick="bulkClearSelection()">Abbrechen</button>
+</div>
+
 <div class="fax-list" id="fax-list">
     {% if faxes %}
     {% for fax in faxes %}
     <div class="fax-card-row" data-fax-id="{{ fax.id }}">
+        <label class="fax-card-select" onclick="event.stopPropagation();">
+            <input type="checkbox" class="bulk-check" data-fax-id="{{ fax.id }}" onchange="bulkUpdateCount()">
+        </label>
         <a href="{{ url_for('fax_detail', fax_id=fax.id) }}" class="fax-card-thumb">
             {% if fax.thumbnail_path %}
             <img src="{{ url_for('static', filename='thumbnails/' ~ fax.id ~ '.png') }}" alt="" loading="lazy" onerror="this.outerHTML='<div class=\'thumb-placeholder\'>PDF</div>'">
@@ -124,6 +140,8 @@ function renderFaxCard(f) {
     statusBtns += '</div>';
     var printInd = f.printed ? '<span class="print-indicator" title="Gedruckt">&#9113;</span>' : '';
     return '<div class="fax-card-row" data-fax-id="' + f.id + '">' +
+        '<label class="fax-card-select" onclick="event.stopPropagation();">' +
+        '<input type="checkbox" class="bulk-check" data-fax-id="' + f.id + '" onchange="bulkUpdateCount()"></label>' +
         '<a href="/faxe/' + f.id + '" class="fax-card-thumb">' + thumb + '</a>' +
         '<a href="/faxe/' + f.id + '" class="fax-card-content">' +
         '<div class="fax-card-header"><span class="fax-sender">' + escapeHtml(sender) + '</span>' +
@@ -165,6 +183,79 @@ function loadMore() {
             _page--;
         });
 }
+
+// --- Bulk-Aktionen ---
+function _selectedIds() {
+    return Array.from(document.querySelectorAll('.bulk-check:checked')).map(function(c) {
+        return parseInt(c.dataset.faxId);
+    });
+}
+function bulkUpdateCount() {
+    var ids = _selectedIds();
+    var bar = document.getElementById('bulk-toolbar');
+    var cnt = document.getElementById('bulk-count');
+    if (ids.length === 0) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    cnt.textContent = ids.length + ' ausgewaehlt';
+}
+function bulkClearSelection() {
+    document.querySelectorAll('.bulk-check:checked').forEach(function(c) { c.checked = false; });
+    bulkUpdateCount();
+}
+function bulkApply(action) {
+    var ids = _selectedIds();
+    if (ids.length === 0) return;
+    var body = {ids: ids, action: action};
+    if (action === 'status') {
+        var v = document.getElementById('bulk-status').value;
+        if (!v) { showToast('Hinweis', 'Bitte Status waehlen'); return; }
+        body.value = v;
+    }
+    if (action === 'archive' && !confirm(ids.length + ' Faxe archivieren?')) return;
+    fetch('/api/fax/bulk', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) { showToast('Fehler', d.error || 'Aktion fehlgeschlagen'); return; }
+        showToast('Fertig', d.affected + ' Faxe aktualisiert');
+        if (action === 'archive') {
+            ids.forEach(function(id) {
+                var card = document.querySelector('.fax-card-row[data-fax-id="' + id + '"]');
+                if (card) card.remove();
+            });
+        } else if (action === 'status') {
+            ids.forEach(function(id) {
+                document.querySelectorAll('.status-btns[data-fax-id="' + id + '"]').forEach(function(container) {
+                    container.querySelectorAll('.status-btn').forEach(function(btn) {
+                        btn.classList.toggle('active', btn.dataset.status === body.value);
+                    });
+                });
+            });
+        }
+        bulkClearSelection();
+        fetch('/api/unread').then(function(r) { return r.json(); }).then(function(u) {
+            _unreadCount = u.count; updateTabTitle();
+        });
+    }).catch(function() { showToast('Fehler', 'Verbindungsfehler'); });
+}
+
+// Shift-Click fuer Range-Selection
+var _lastChecked = null;
+document.addEventListener('click', function(e) {
+    if (!e.target.classList.contains('bulk-check')) return;
+    var cbs = Array.from(document.querySelectorAll('.bulk-check'));
+    if (e.shiftKey && _lastChecked) {
+        var i1 = cbs.indexOf(_lastChecked);
+        var i2 = cbs.indexOf(e.target);
+        if (i1 >= 0 && i2 >= 0) {
+            var lo = Math.min(i1, i2), hi = Math.max(i1, i2);
+            for (var i = lo; i <= hi; i++) cbs[i].checked = e.target.checked;
+            bulkUpdateCount();
+        }
+    }
+    _lastChecked = e.target;
+});
 
 // Infinite Scroll: lade mehr wenn nahe am Ende
 if (!_done) {

@@ -245,6 +245,33 @@ def update_fax_status(fax_id, status):
         )
 
 
+def bulk_update_status(fax_ids, status):
+    """Status fuer mehrere Faxe gleichzeitig setzen. Rueckgabe: betroffene Zeilen."""
+    if not fax_ids:
+        return 0
+    placeholders = ",".join("?" * len(fax_ids))
+    with db_connection() as conn:
+        cur = conn.execute(
+            f"UPDATE faxes SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id IN ({placeholders})",
+            [status, *fax_ids]
+        )
+        return cur.rowcount
+
+
+def bulk_archive(fax_ids):
+    """Mehrere Faxe gleichzeitig archivieren. Rueckgabe: betroffene Zeilen."""
+    if not fax_ids:
+        return 0
+    placeholders = ",".join("?" * len(fax_ids))
+    with db_connection() as conn:
+        cur = conn.execute(
+            f"UPDATE faxes SET archived = 1, archived_at = CURRENT_TIMESTAMP, "
+            f"updated_at = CURRENT_TIMESTAMP WHERE id IN ({placeholders}) AND archived = 0",
+            fax_ids
+        )
+        return cur.rowcount
+
+
 def update_fax_ocr(fax_id, ocr_text, ocr_done=1):
     """OCR-Text fuer ein Fax speichern."""
     with db_connection() as conn:
