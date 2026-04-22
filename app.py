@@ -1022,7 +1022,7 @@ def start_background_services():
     from ocr import start_ocr_worker
     from scheduler import start_scheduler
 
-    notify.start_worker()
+    # notify-Worker wird bereits beim App-Startup gestartet (s.u.).
     start_watcher(broadcast)
     start_ocr_worker(broadcast)
     start_scheduler()
