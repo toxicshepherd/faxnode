@@ -56,6 +56,9 @@ DELETE_AFTER_DAYS = int(os.environ.get("DELETE_AFTER_DAYS", "90"))
 # Standarddrucker (Name wie eingerichtet, leer = keiner)
 DEFAULT_PRINTER = os.environ.get("DEFAULT_PRINTER", "")
 
+# Discord-Webhook fuer Benachrichtigungen (leer = deaktiviert)
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
+
 # Polling-Fallback Intervall in Sekunden
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))
 

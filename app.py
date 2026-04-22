@@ -16,6 +16,7 @@ from flask import (
 )
 import db
 import config
+import notify
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ def not_found(e):
 @app.errorhandler(500)
 def server_error(e):
     logger.error("Interner Fehler: %s", e)
+    notify.send_discord("Interner Fehler", str(e)[:1500], level="error")
     return jsonify({"error": "Interner Serverfehler"}), 500
 
 
@@ -323,11 +325,12 @@ def api_setup_test_printers():
 def api_setup_save():
     data = request.get_json()
     fax_dir = data.get("fax_dir", "").strip()
+    discord_webhook = (data.get("discord_webhook") or "").strip()
     if not fax_dir or not os.path.isdir(fax_dir):
         return jsonify({"ok": False, "error": "Ungueltiges Fax-Verzeichnis"})
-    # Newlines in fax_dir blockieren (.env-Injection)
-    if "\n" in fax_dir or "\r" in fax_dir:
-        return jsonify({"ok": False, "error": "Ungueltiges Fax-Verzeichnis"})
+    # Newlines in fax_dir/webhook blockieren (.env-Injection)
+    if "\n" in fax_dir or "\r" in fax_dir or "\n" in discord_webhook or "\r" in discord_webhook:
+        return jsonify({"ok": False, "error": "Ungueltige Eingabe"})
 
     # .env mit Merge-Logik schreiben (bestehende Keys bewahren)
     env_path = Path(config.BASE_DIR) / ".env"
@@ -340,10 +343,14 @@ def api_setup_save():
                     existing[key] = line
         existing["FAX_WATCH_DIR"] = f"FAX_WATCH_DIR={fax_dir}"
         existing["SECRET_KEY"] = f"SECRET_KEY={config.SECRET_KEY}"
+        if discord_webhook:
+            existing["DISCORD_WEBHOOK_URL"] = f"DISCORD_WEBHOOK_URL={discord_webhook}"
         env_path.write_text("\n".join(existing.values()) + "\n")
 
     # Config im Speicher aktualisieren
     config.FAX_WATCH_DIR = fax_dir
+    if discord_webhook:
+        config.DISCORD_WEBHOOK_URL = discord_webhook
 
     # DB initialisieren und Hintergrund-Services starten (nur im primaeren Worker)
     db.init_db()
@@ -459,6 +466,7 @@ def settings():
         fax_watch_dir=config.FAX_WATCH_DIR,
         database_path=config.DATABASE,
         default_printer=config.DEFAULT_PRINTER,
+        discord_webhook_url=config.DISCORD_WEBHOOK_URL,
     )
 
 
@@ -762,6 +770,41 @@ def api_save_default_printer():
     return jsonify({"ok": True})
 
 
+@app.route("/api/einstellungen/discord", methods=["GET"])
+def api_get_discord():
+    """Aktuelle Discord-Webhook-URL zurueckgeben."""
+    return jsonify({"url": config.DISCORD_WEBHOOK_URL})
+
+
+@app.route("/api/einstellungen/discord", methods=["POST"])
+def api_save_discord():
+    """Discord-Webhook-URL speichern."""
+    data = request.get_json() or {}
+    url = (data.get("url") or "").strip()
+    if "\n" in url or "\r" in url:
+        return jsonify({"ok": False, "error": "Ungueltige URL"})
+    if url and not notify._is_valid_webhook(url):
+        return jsonify({"ok": False, "error": "URL muss mit https://discord.com/api/webhooks/ beginnen"})
+    config.DISCORD_WEBHOOK_URL = url
+    _save_env_settings()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/einstellungen/discord/test", methods=["POST"])
+def api_test_discord():
+    """Test-Nachricht an den Webhook senden. Nutzt die URL aus dem Body,
+    falls angegeben — sonst die gespeicherte."""
+    data = request.get_json() or {}
+    url = (data.get("url") or "").strip() or None
+    ok, msg = notify.send_discord_sync(
+        "FaxNode Test",
+        "Wenn du das siehst, funktioniert die Verbindung.",
+        level="success",
+        url=url,
+    )
+    return jsonify({"ok": ok, "message": msg})
+
+
 @app.route("/api/fax/<int:fax_id>/archivieren", methods=["POST"])
 def api_archive_fax(fax_id):
     """Fax manuell archivieren."""
@@ -811,18 +854,22 @@ _env_lock = threading.Lock()
 
 
 def _save_env_settings():
-    """Archiv-Einstellungen in .env speichern."""
+    """Laufzeit-aenderbare Einstellungen in .env speichern."""
     env_path = Path(config.BASE_DIR) / ".env"
     with _env_lock:
         lines = []
         if env_path.exists():
             for line in env_path.read_text().splitlines():
-                if not line.startswith(("ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=", "DELETE_AFTER_DAYS=", "DEFAULT_PRINTER=")):
+                if not line.startswith((
+                    "ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=",
+                    "DELETE_AFTER_DAYS=", "DEFAULT_PRINTER=", "DISCORD_WEBHOOK_URL=",
+                )):
                     lines.append(line)
         lines.append(f"ARCHIVE_AFTER_DAYS={config.ARCHIVE_AFTER_DAYS}")
         lines.append(f"FORCE_ARCHIVE_AFTER_DAYS={config.FORCE_ARCHIVE_AFTER_DAYS}")
         lines.append(f"DELETE_AFTER_DAYS={config.DELETE_AFTER_DAYS}")
         lines.append(f"DEFAULT_PRINTER={config.DEFAULT_PRINTER}")
+        lines.append(f"DISCORD_WEBHOOK_URL={config.DISCORD_WEBHOOK_URL}")
         env_path.write_text("\n".join(lines) + "\n")
 
 
@@ -876,9 +923,11 @@ def start_background_services():
     from ocr import start_ocr_worker
     from scheduler import start_scheduler
 
+    notify.start_worker()
     start_watcher(broadcast)
     start_ocr_worker(broadcast)
     start_scheduler()
+    notify.send_discord("FaxNode gestartet", f"Host {socket.gethostname()} ist online.", level="success")
 
 
 # Background-Services nur einmal starten (nicht in jedem Gunicorn-Worker).
@@ -908,6 +957,7 @@ with app.app_context():
     db.init_db()
     _load_custom_categories()
     if _is_primary:
+        notify.start_worker()
         _discovery_thread = threading.Thread(
             target=_discovery_responder, daemon=True, name="udp-discovery")
         _discovery_thread.start()

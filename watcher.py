@@ -123,8 +123,8 @@ def process_file(file_path):
     _check_auto_print(fax_id, parsed["phone_number"], file_path)
 
     # SSE broadcast
+    sender_name = entry["name"] if entry else None
     if _broadcast:
-        sender_name = entry["name"] if entry else None
         _broadcast("new_fax", {
             "id": fax_id,
             "phone_number": parsed["phone_number"],
@@ -132,6 +132,17 @@ def process_file(file_path):
             "received_at": parsed["received_at"],
             "filename": filename,
         })
+
+    # Discord-Notification (asynchron, nur wenn Webhook konfiguriert)
+    try:
+        import notify
+        notify.send_discord(
+            "Neues Fax",
+            f"**{sender_name or parsed['phone_number']}**\nKategorie: {category}\nEmpfangen: {parsed['received_at']}",
+            level="info",
+        )
+    except Exception:
+        pass
 
 
 def _check_auto_print(fax_id, phone_number, file_path):
@@ -155,6 +166,11 @@ def _check_auto_print(fax_id, phone_number, file_path):
                         fax_id, printer_name, copies)
         except Exception as e:
             logger.error("Auto-Print fehlgeschlagen: %s", e)
+            try:
+                import notify
+                notify.send_discord("Auto-Print fehlgeschlagen", f"Drucker {printer_name}: {e}", level="error")
+            except Exception:
+                pass
 
 
 def sync_directory(initial=False):
@@ -223,8 +239,8 @@ def sync_directory(initial=False):
         if not initial:
             logger.info("Neues Fax: %s von %s (Kategorie: %s)", filename, parsed["phone_number"], category)
             _check_auto_print(fax_id, parsed["phone_number"], file_path)
+            sender_name = entry["name"] if entry else None
             if _broadcast:
-                sender_name = entry["name"] if entry else None
                 _broadcast("new_fax", {
                     "id": fax_id,
                     "phone_number": parsed["phone_number"],
@@ -232,6 +248,15 @@ def sync_directory(initial=False):
                     "received_at": parsed["received_at"],
                     "filename": filename,
                 })
+            try:
+                import notify
+                notify.send_discord(
+                    "Neues Fax",
+                    f"**{sender_name or parsed['phone_number']}**\nKategorie: {category}\nEmpfangen: {parsed['received_at']}",
+                    level="info",
+                )
+            except Exception:
+                pass
 
     # Auch entfernte Dateien aus dem known-Set streichen
     with _known_files_lock:

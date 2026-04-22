@@ -204,6 +204,16 @@
             <div id="added-printers" style="margin-top:1rem;"></div>
         </div>
         <div class="card">
+            <h2>Discord-Benachrichtigungen (optional)</h2>
+            <p class="desc">Bei neuen Faxen, Fehlern und OCR-Problemen eine Nachricht an Discord senden.</p>
+            <div class="fg">
+                <label>Webhook-URL</label>
+                <input type="text" id="discord-webhook" placeholder="https://discord.com/api/webhooks/...">
+            </div>
+            <button class="btn" onclick="testDiscord()" id="discord-test-btn">Test-Nachricht senden</button>
+            <div class="msg" id="discord-msg"></div>
+        </div>
+        <div class="card">
             <h2>Einrichtung abschliessen</h2>
             <p class="desc">FaxNode wird konfiguriert und beginnt sofort mit der Indizierung aller vorhandenen Faxe.</p>
             <div class="btn-row">
@@ -502,13 +512,28 @@ function updateAddedList() {
     });
 }
 
+function testDiscord() {
+    var url = document.getElementById('discord-webhook').value.trim();
+    if (!url) { setMsg('discord-msg', 'err', 'Bitte URL eingeben'); return; }
+    setBtnLoading('discord-test-btn', true, 'Sende...');
+    fetch('/api/einstellungen/discord/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        setBtnLoading('discord-test-btn', false, 'Test-Nachricht senden');
+        setMsg('discord-msg', d.ok ? 'ok' : 'err', d.message || (d.ok ? 'Gesendet' : 'Fehler'));
+    });
+}
+
 // Speichern
 function saveSetup() {
     setBtnLoading('save-btn', true, 'Wird gestartet...');
+    var discord = document.getElementById('discord-webhook').value.trim();
     fetch('/api/setup/save', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({fax_dir: _mountPoint})
+        body: JSON.stringify({fax_dir: _mountPoint, discord_webhook: discord})
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) {
             document.querySelector('.setup').innerHTML =

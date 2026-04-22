@@ -131,6 +131,19 @@
 </div>
 
 <div class="settings-section card">
+    <h3>Discord-Benachrichtigungen</h3>
+    <p class="text-muted" style="margin-bottom:1rem;font-size:0.85rem;">Webhook-URL fuer Benachrichtigungen bei neuen Faxen, Fehlern und OCR-Problemen. Leer = deaktiviert.</p>
+    <div class="form-row">
+        <label>Webhook-URL</label>
+        <input type="text" id="discord-webhook-input" value="{{ discord_webhook_url }}" placeholder="https://discord.com/api/webhooks/..." style="flex:1;">
+    </div>
+    <div class="form-actions" style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+        <button type="button" class="btn btn-sm" onclick="saveDiscord()">Speichern</button>
+        <button type="button" class="btn btn-sm btn-ghost" onclick="testDiscord()">Test senden</button>
+    </div>
+</div>
+
+<div class="settings-section card">
     <h3>System</h3>
     <div class="meta-row">
         <span class="meta-label">Version</span>
@@ -287,6 +300,29 @@ function saveDefaultPrinter() {
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) showToast('Gespeichert', printer ? 'Standarddrucker: ' + printer : 'Standarddrucker entfernt');
         else alert(d.error || 'Fehler');
+    });
+}
+
+function saveDiscord() {
+    var url = document.getElementById('discord-webhook-input').value.trim();
+    fetch('/api/einstellungen/discord', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) showToast('Gespeichert', url ? 'Discord-Webhook aktiv' : 'Discord deaktiviert');
+        else showToast('Fehler', d.error || 'Konnte nicht gespeichert werden');
+    });
+}
+
+function testDiscord() {
+    var url = document.getElementById('discord-webhook-input').value.trim();
+    fetch('/api/einstellungen/discord/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(url ? {url: url} : {})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        showToast(d.ok ? 'Test gesendet' : 'Fehler', d.message || '');
     });
 }
 </script>

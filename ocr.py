@@ -92,6 +92,11 @@ def _ocr_worker():
                 db.update_fax_ocr(fax_id, None, ocr_done=-1)
             except Exception:
                 pass
+            try:
+                import notify
+                notify.send_discord("OCR fehlgeschlagen", f"Fax {fax_id}: {e}", level="warning")
+            except Exception:
+                pass
 
         finally:
             ocr_queue.task_done()
