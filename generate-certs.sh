@@ -7,11 +7,12 @@ set -e
 CERT_DIR="${1:-$(dirname "$0")/certs}"
 mkdir -p "$CERT_DIR"
 
-# Lokale IP und Hostname ermitteln
-IP=$(hostname -I | awk '{print $1}')
+# Lokale IPs und Hostname ermitteln
 HOSTNAME=$(hostname)
+mapfile -t ALL_IPS < <(hostname -I | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+IP="${ALL_IPS[0]}"
 
-echo "Zertifikate fuer: $IP ($HOSTNAME)"
+echo "Zertifikate fuer: ${ALL_IPS[*]} ($HOSTNAME)"
 
 # --- CA generieren (nur beim ersten Mal) ---
 if [ ! -f "$CERT_DIR/ca.key" ]; then
@@ -27,6 +28,14 @@ fi
 
 # --- Server-Zertifikat generieren (immer neu, fuer aktuelle IP) ---
 echo "Server-Zertifikat wird erstellt..."
+
+ALT_IP_LINES=""
+idx=1
+for ip in "${ALL_IPS[@]}"; do
+    ALT_IP_LINES+="IP.${idx} = ${ip}"$'\n'
+    idx=$((idx + 1))
+done
+ALT_IP_LINES+="IP.${idx} = 127.0.0.1"$'\n'
 
 cat > "$CERT_DIR/server.cnf" <<EOF
 [req]
@@ -45,9 +54,7 @@ keyUsage = digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
 
 [alt_names]
-IP.1 = $IP
-IP.2 = 127.0.0.1
-DNS.1 = $HOSTNAME
+${ALT_IP_LINES}DNS.1 = $HOSTNAME
 DNS.2 = localhost
 DNS.3 = faxnode.local
 EOF
@@ -69,7 +76,7 @@ rm -f "$CERT_DIR/server.csr" "$CERT_DIR/server.cnf" "$CERT_DIR/ca.srl"
 chmod 600 "$CERT_DIR/ca.key" "$CERT_DIR/server.key"
 chmod 644 "$CERT_DIR/ca.crt" "$CERT_DIR/server.crt"
 
-echo "Server-Zertifikat erstellt fuer IP=$IP"
+echo "Server-Zertifikat erstellt fuer IPs=${ALL_IPS[*]}"
 echo ""
 echo "Dateien:"
 echo "  CA:     $CERT_DIR/ca.crt"

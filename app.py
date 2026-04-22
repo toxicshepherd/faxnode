@@ -45,6 +45,42 @@ def _is_valid_ip(ip: str) -> bool:
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
 
+_static_dir = Path(__file__).parent / "static"
+
+
+@app.context_processor
+def inject_static_version():
+    def static_v(filename):
+        try:
+            mtime = int((_static_dir / filename).stat().st_mtime)
+        except OSError:
+            mtime = 0
+        return url_for("static", filename=filename) + f"?v={mtime}"
+    return {"static_v": static_v}
+
+
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    if request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Nicht gefunden"}), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error("Interner Fehler: %s", e)
+    return jsonify({"error": "Interner Serverfehler"}), 500
+
 
 def is_setup_done():
     """Pruefen ob die Ersteinrichtung abgeschlossen ist.
@@ -366,6 +402,7 @@ def fax_detail(fax_id):
         notes=notes,
         statuses=config.FAX_STATUSES,
         categories=config.FAX_CATEGORIES,
+        default_printer=config.DEFAULT_PRINTER,
     )
 
 
@@ -390,7 +427,7 @@ def address_book():
         printers = get_printers()
     except Exception as e:
         logger.debug("Drucker konnten nicht geladen werden: %s", e)
-    return render_template("address_book.html", entries=entries, printers=printers, categories=config.FAX_CATEGORIES)
+    return render_template("address_book.html", entries=entries, printers=printers, categories=config.FAX_CATEGORIES, default_printer=config.DEFAULT_PRINTER)
 
 
 @app.route("/einstellungen")
@@ -480,7 +517,7 @@ def api_print_fax(fax_id):
         return jsonify({"ok": True})
     except Exception as e:
         logger.error("Druckfehler fuer Fax %d: %s", fax_id, e)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Druckauftrag fehlgeschlagen"}), 500
 
 
 @app.route("/api/drucker")

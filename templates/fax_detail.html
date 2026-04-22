@@ -148,6 +148,8 @@
 </div>
 
 <script>
+var DEFAULT_PRINTER = {{ default_printer | tojson }};
+
 function toggleAddToAddressBook() {
     var form = document.getElementById('add-address-form');
     var btn = document.getElementById('add-address-btn');
@@ -169,7 +171,11 @@ function loadPrintersForAddress() {
             sel.innerHTML = '<option value="">Keine Drucker</option>';
         } else {
             names.forEach(function(n) {
-                sel.innerHTML += '<option value="' + n + '">' + n + '</option>';
+                var opt = document.createElement('option');
+                opt.value = n;
+                opt.textContent = n;
+                if (n === DEFAULT_PRINTER) opt.selected = true;
+                sel.appendChild(opt);
             });
         }
     });

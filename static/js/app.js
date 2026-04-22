@@ -220,27 +220,26 @@ var _defaultPrinterLoaded = false;
 
 // --- Print ---
 function printFax(faxId) {
+    var btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
+    if (btn) btn.disabled = true;
+    function release() { if (btn) btn.disabled = false; }
     function doPrint(defaultPrinter) {
         fetch('/api/drucker').then(function(r) { return r.json(); }).then(function(printers) {
             var names = Object.keys(printers);
-            if (names.length === 0) { showToast('Fehler', 'Keine Drucker gefunden'); return; }
-            var printer;
+            if (names.length === 0) { showToast('Fehler', 'Keine Drucker gefunden'); release(); return; }
+            var printerPromise;
             if (defaultPrinter && names.indexOf(defaultPrinter) !== -1) {
-                printer = defaultPrinter;
+                printerPromise = Promise.resolve(defaultPrinter);
             } else if (names.length === 1) {
-                printer = names[0];
+                printerPromise = Promise.resolve(names[0]);
             } else {
-                printer = prompt('Drucker waehlen:\n' + names.join('\n'));
+                printerPromise = showPrinterModal(names, defaultPrinter);
             }
-            if (!printer) return;
-            fetch('/api/fax/' + faxId + '/drucken', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({printer: printer, copies: 1})
-            }).then(function(r) { return r.json(); }).then(function(d) {
-                showToast(d.ok ? 'Druckauftrag gesendet' : 'Fehler', d.error || printer);
+            printerPromise.then(function(printer) {
+                if (!printer) { release(); return; }
+                sendPrint(faxId, printer).finally(release);
             });
-        });
+        }).catch(release);
     }
     if (_defaultPrinterLoaded) {
         doPrint(_defaultPrinter);
@@ -253,11 +252,55 @@ function printFax(faxId) {
     }
 }
 
+function sendPrint(faxId, printer) {
+    return fetch('/api/fax/' + faxId + '/drucken', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({printer: printer, copies: 1})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        showToast(d.ok ? 'Druckauftrag gesendet' : 'Fehler', d.error || printer);
+    });
+}
+
+function showPrinterModal(names, defaultPrinter) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg-card);border-radius:var(--radius);padding:1.5rem;min-width:280px;display:flex;flex-direction:column;gap:1rem;';
+    var label = document.createElement('label');
+    label.textContent = 'Drucker waehlen';
+    label.style.fontWeight = '600';
+    var sel = document.createElement('select');
+    sel.className = 'status-select';
+    names.forEach(function(n) {
+        var o = document.createElement('option');
+        o.value = n; o.textContent = n;
+        if (n === defaultPrinter) o.selected = true;
+        sel.appendChild(o);
+    });
+    var btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:0.5rem;justify-content:flex-end;';
+    var cancel = document.createElement('button');
+    cancel.className = 'btn btn-sm btn-ghost'; cancel.textContent = 'Abbrechen';
+    var ok = document.createElement('button');
+    ok.className = 'btn btn-sm'; ok.textContent = 'Drucken';
+    btns.appendChild(cancel); btns.appendChild(ok);
+    box.appendChild(label); box.appendChild(sel); box.appendChild(btns);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    return new Promise(function(resolve) {
+        ok.onclick = function() { document.body.removeChild(overlay); resolve(sel.value); };
+        cancel.onclick = function() { document.body.removeChild(overlay); resolve(null); };
+    });
+}
+
 function quickPrint(faxId) { printFax(faxId); }
 
 // --- Archive ---
 function archiveFax(faxId) {
     if (!confirm('Fax wirklich archivieren?')) return;
+    var btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
+    if (btn) btn.disabled = true;
     fetch('/api/fax/' + faxId + '/archivieren', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
@@ -273,7 +316,7 @@ function archiveFax(faxId) {
         } else {
             showToast('Fehler', d.error || 'Archivierung fehlgeschlagen');
         }
-    });
+    }).finally(function() { if (btn) btn.disabled = false; });
 }
 
 function unarchiveFax(faxId) {

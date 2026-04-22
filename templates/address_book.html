@@ -40,7 +40,7 @@
                 <select name="printer_name">
                     <option value="">Drucker waehlen...</option>
                     {% for name, info in printers.items() %}
-                    <option value="{{ name }}">{{ name }}</option>
+                    <option value="{{ name }}" {% if name == default_printer %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                     {% if not printers %}
                     <option disabled>Keine Drucker eingerichtet</option>
