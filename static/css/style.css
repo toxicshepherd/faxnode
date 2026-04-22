@@ -310,6 +310,7 @@ a { color: var(--accent); text-decoration: none; }
     transition: var(--transition);
 }
 .fax-card-row:hover { border-color: var(--accent); }
+.fax-card-row.kbd-focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 
 .fax-card-thumb {
     grid-row: 1 / 3;

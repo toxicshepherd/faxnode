@@ -437,6 +437,30 @@ def get_fax_count_by_category(archived=0):
         return {row["category"]: row["cnt"] for row in rows}
 
 
+def get_neighbor_ids(fax_id):
+    """IDs des vorigen/naechsten Faxes in chronologischer Reihenfolge.
+
+    Bleibt im selben archived-Bucket wie das aktuelle Fax. Rueckgabe:
+    dict mit prev/next — None wenn am Rand.
+    """
+    with db_connection() as conn:
+        cur = conn.execute("SELECT received_at, archived FROM faxes WHERE id = ?", (fax_id,)).fetchone()
+        if not cur:
+            return {"prev": None, "next": None}
+        prev_row = conn.execute(
+            "SELECT id FROM faxes WHERE archived = ? AND received_at < ? ORDER BY received_at DESC LIMIT 1",
+            (cur["archived"], cur["received_at"])
+        ).fetchone()
+        next_row = conn.execute(
+            "SELECT id FROM faxes WHERE archived = ? AND received_at > ? ORDER BY received_at ASC LIMIT 1",
+            (cur["archived"], cur["received_at"])
+        ).fetchone()
+        return {
+            "prev": prev_row["id"] if prev_row else None,
+            "next": next_row["id"] if next_row else None,
+        }
+
+
 def get_unread_count():
     """Anzahl ungelesener Faxe (Status 'neu')."""
     with db_connection() as conn:

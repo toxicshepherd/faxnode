@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Fax von {{ fax.sender_name or fax.phone_number }} — FaxNode{% endblock %}
 
+{% block head_extra %}
+{% if neighbors.prev %}<link rel="prefetch" href="{{ url_for('api_serve_pdf', fax_id=neighbors.prev) }}" as="document">{% endif %}
+{% if neighbors.next %}<link rel="prefetch" href="{{ url_for('api_serve_pdf', fax_id=neighbors.next) }}" as="document">{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="page-header" data-auto-read="{{ fax.id }}" data-current-status="{{ fax.status }}">
     <a href="{{ url_for('fax_list') }}" class="btn btn-sm btn-ghost">&larr; Zurueck</a>

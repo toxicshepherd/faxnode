@@ -405,10 +405,12 @@ def fax_detail(fax_id):
     if not fax:
         abort(404)
     notes = db.get_notes(fax_id)
+    neighbors = db.get_neighbor_ids(fax_id)
     return render_template(
         "fax_detail.html",
         fax=fax,
         notes=notes,
+        neighbors=neighbors,
         statuses=config.FAX_STATUSES,
         categories=config.FAX_CATEGORIES,
         default_printer=config.DEFAULT_PRINTER,

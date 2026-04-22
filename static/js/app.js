@@ -27,8 +27,31 @@ window.addEventListener('beforeunload', function() {
 });
 
 es.addEventListener('error', function() {
-    // EventSource reconnects automatisch, aber wir loggen es
     console.warn('SSE-Verbindung unterbrochen, versuche erneut...');
+});
+
+// Sicherheitsnetz: unabhaengig von SSE alle 60s den Unread-Counter
+// abgleichen. Faengt ab, wenn SSE stirbt, der Browser den Tab suspended
+// oder eine Verbindung haengt.
+setInterval(function() {
+    fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
+        if (typeof d.count === 'number' && d.count !== _unreadCount) {
+            _unreadCount = d.count;
+            updateTabTitle();
+        }
+    }).catch(function() {});
+}, 60000);
+
+// Wenn Tab nach Suspend wieder sichtbar wird, sofort Counter aktualisieren.
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        fetch('/api/unread').then(function(r) { return r.json(); }).then(function(d) {
+            if (typeof d.count === 'number') {
+                _unreadCount = d.count;
+                updateTabTitle();
+            }
+        }).catch(function() {});
+    }
 });
 
 es.addEventListener('new_fax', function(e) {
@@ -396,6 +419,79 @@ function showToast(title, body, link) {
     container.appendChild(toast);
     setTimeout(function() { toast.remove(); }, 5000);
 }
+
+// --- Keyboard-Shortcuts ---
+// j/k    Naechste/vorige Fax-Card (Listen-Ansicht)
+// Enter  Fokussierte Card oeffnen
+// e      Auf "erledigt" setzen (Liste: fokussierte Card; Detail: aktuelles Fax)
+// a      Archivieren (analog)
+// /      Suchfeld fokussieren
+// Esc    Suchfeld leeren / zurueck zur Liste
+var _focusedIndex = -1;
+function _faxCards() { return document.querySelectorAll('.fax-card-row'); }
+function _setFocused(idx) {
+    var cards = _faxCards();
+    if (cards.length === 0) return;
+    cards.forEach(function(c) { c.classList.remove('kbd-focus'); });
+    idx = Math.max(0, Math.min(cards.length - 1, idx));
+    _focusedIndex = idx;
+    cards[idx].classList.add('kbd-focus');
+    cards[idx].scrollIntoView({block: 'nearest', behavior: 'smooth'});
+}
+function _currentFaxId() {
+    // Detail-View: data-auto-read="<id>"
+    var detail = document.querySelector('[data-auto-read]');
+    if (detail) return parseInt(detail.dataset.autoRead);
+    // Listen-View: fokussierte Card
+    if (_focusedIndex >= 0) {
+        var cards = _faxCards();
+        if (cards[_focusedIndex]) return parseInt(cards[_focusedIndex].dataset.faxId);
+    }
+    return null;
+}
+document.addEventListener('keydown', function(e) {
+    // Wenn in Input/Textarea getippt wird, nur Esc beachten
+    var tag = (e.target.tagName || '').toUpperCase();
+    var inField = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable;
+    if (e.key === 'Escape') {
+        if (inField) { e.target.blur(); return; }
+        if (location.pathname.match(/^\/faxe\/\d+$/)) { location.href = '/faxe'; return; }
+        return;
+    }
+    if (inField || e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (e.key === '/') {
+        var search = document.querySelector('.search-input');
+        if (search) { e.preventDefault(); search.focus(); search.select(); }
+        return;
+    }
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+        if (_faxCards().length) { e.preventDefault(); _setFocused(_focusedIndex < 0 ? 0 : _focusedIndex + 1); }
+        return;
+    }
+    if (e.key === 'k' || e.key === 'ArrowUp') {
+        if (_faxCards().length) { e.preventDefault(); _setFocused(_focusedIndex < 0 ? 0 : _focusedIndex - 1); }
+        return;
+    }
+    if (e.key === 'Enter') {
+        var cards = _faxCards();
+        if (cards[_focusedIndex]) {
+            e.preventDefault();
+            location.href = '/faxe/' + cards[_focusedIndex].dataset.faxId;
+        }
+        return;
+    }
+    if (e.key === 'e') {
+        var id = _currentFaxId();
+        if (id) { e.preventDefault(); setStatus(id, 'erledigt'); }
+        return;
+    }
+    if (e.key === 'a') {
+        var id2 = _currentFaxId();
+        if (id2) { e.preventDefault(); archiveFax(id2); }
+        return;
+    }
+});
 
 // --- Helpers ---
 function escapeHtml(str) {
