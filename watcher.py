@@ -141,8 +141,8 @@ def process_file(file_path):
             f"**{sender_name or parsed['phone_number']}**\nKategorie: {category}\nEmpfangen: {parsed['received_at']}",
             level="info",
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Discord-Notify (new_fax) fehlgeschlagen: %s", e)
 
 
 def _check_auto_print(fax_id, phone_number, file_path):
@@ -169,8 +169,8 @@ def _check_auto_print(fax_id, phone_number, file_path):
             try:
                 import notify
                 notify.send_discord("Auto-Print fehlgeschlagen", f"Drucker {printer_name}: {e}", level="error")
-            except Exception:
-                pass
+            except Exception as notify_err:
+                logger.warning("Discord-Notify (auto_print) fehlgeschlagen: %s", notify_err)
 
 
 def sync_directory(initial=False):
@@ -255,8 +255,8 @@ def sync_directory(initial=False):
                     f"**{sender_name or parsed['phone_number']}**\nKategorie: {category}\nEmpfangen: {parsed['received_at']}",
                     level="info",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Discord-Notify (sync) fehlgeschlagen: %s", e)
 
     # Auch entfernte Dateien aus dem known-Set streichen
     with _known_files_lock:

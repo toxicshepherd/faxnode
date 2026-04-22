@@ -227,18 +227,30 @@ def get_fax(fax_id):
 
 
 def insert_fax(filename, phone_number, received_at, file_path, file_size, page_count=1, category="sonstiges"):
-    """Neues Fax einfuegen oder Dateipfad aktualisieren."""
+    """Neues Fax einfuegen oder Dateipfad aktualisieren.
+
+    Rueckgabe: fax_id nur bei tatsaechlichem INSERT (neues Fax). Bei
+    bereits existierendem Eintrag wird der Pfad aktualisiert, aber
+    None zurueckgegeben — so koennen Callers (Watcher vs. Polling)
+    race-safe erkennen, ob sie weiterverarbeiten duerfen (OCR,
+    Notification, Auto-Print).
+    """
     with db_connection() as conn:
         cursor = conn.execute(
             """INSERT INTO faxes
                (filename, phone_number, received_at, file_path, file_size, page_count, category)
                VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(filename) DO UPDATE SET
-                   file_path = excluded.file_path,
-                   file_size = excluded.file_size""",
+               ON CONFLICT(filename) DO NOTHING""",
             (filename, phone_number, received_at, file_path, file_size, page_count, category)
         )
-        return cursor.lastrowid if cursor.rowcount > 0 else None
+        if cursor.rowcount == 1:
+            return cursor.lastrowid
+        # Existierender Eintrag — file_path/size trotzdem auffrischen.
+        conn.execute(
+            "UPDATE faxes SET file_path = ?, file_size = ? WHERE filename = ?",
+            (file_path, file_size, filename)
+        )
+        return None
 
 
 def update_fax_status(fax_id, status):

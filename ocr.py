@@ -90,13 +90,13 @@ def _ocr_worker():
             logger.error("OCR Fehler bei Fax %d: %s", fax_id, e)
             try:
                 db.update_fax_ocr(fax_id, None, ocr_done=-1)
-            except Exception:
-                pass
+            except Exception as db_err:
+                logger.warning("OCR-Fehlerstatus konnte nicht geschrieben werden: %s", db_err)
             try:
                 import notify
                 notify.send_discord("OCR fehlgeschlagen", f"Fax {fax_id}: {e}", level="warning")
-            except Exception:
-                pass
+            except Exception as notify_err:
+                logger.warning("Discord-Notify (ocr) fehlgeschlagen: %s", notify_err)
 
         finally:
             ocr_queue.task_done()

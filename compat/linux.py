@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 from compat.base import PrinterService, NasService, NetworkService
@@ -105,12 +106,30 @@ class LinuxNasService(NasService):
                 found.append({"ip": ip, "is_gateway": ip == gw})
         return found
 
+    def _run_smbclient(self, args: list[str], password: str, timeout: int = 10):
+        """smbclient mit Auth-File (tmpfs, chmod 600) statt env=PASSWD.
+
+        Passwort in env landet in /proc/<pid>/environ und waere von
+        lesenden Prozessen einsehbar — Auth-File ist sicherer und
+        wird nach dem Call unmittelbar geloescht.
+        """
+        fd, auth_path = tempfile.mkstemp(prefix="faxnode-smb-", dir="/dev/shm" if os.path.isdir("/dev/shm") else None)
+        try:
+            os.chmod(auth_path, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(f"password = {password}\n")
+            return subprocess.run(
+                ["smbclient", *args, "-A", auth_path],
+                capture_output=True, text=True, timeout=timeout
+            )
+        finally:
+            try:
+                os.unlink(auth_path)
+            except OSError:
+                pass
+
     def list_shares(self, ip: str, username: str, password: str) -> list[dict]:
-        env = {**os.environ, "PASSWD": password}
-        r = subprocess.run(
-            ["smbclient", "-L", f"//{ip}", "-U", username],
-            capture_output=True, text=True, timeout=10, env=env
-        )
+        r = self._run_smbclient(["-L", f"//{ip}", "-U", username], password)
         shares = []
         for line in r.stdout.splitlines():
             line = line.strip()
@@ -122,11 +141,9 @@ class LinuxNasService(NasService):
     def browse_share(self, ip: str, share: str, path: str,
                      username: str, password: str) -> dict:
         cmd_path = f"{path}/" if path else ""
-        env = {**os.environ, "PASSWD": password}
-        r = subprocess.run(
-            ["smbclient", f"//{ip}/{share}", "-U", username,
-             "-c", f"ls {cmd_path}*"],
-            capture_output=True, text=True, timeout=10, env=env
+        r = self._run_smbclient(
+            [f"//{ip}/{share}", "-U", username, "-c", f"ls {cmd_path}*"],
+            password,
         )
         entries = []
         pdf_count = 0

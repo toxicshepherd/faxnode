@@ -332,20 +332,13 @@ def api_setup_save():
     if "\n" in fax_dir or "\r" in fax_dir or "\n" in discord_webhook or "\r" in discord_webhook:
         return jsonify({"ok": False, "error": "Ungueltige Eingabe"})
 
-    # .env mit Merge-Logik schreiben (bestehende Keys bewahren)
-    env_path = Path(config.BASE_DIR) / ".env"
-    with _env_lock:
-        existing = {}
-        if env_path.exists():
-            for line in env_path.read_text().splitlines():
-                if "=" in line and not line.startswith("#"):
-                    key = line.split("=", 1)[0]
-                    existing[key] = line
-        existing["FAX_WATCH_DIR"] = f"FAX_WATCH_DIR={fax_dir}"
-        existing["SECRET_KEY"] = f"SECRET_KEY={config.SECRET_KEY}"
-        if discord_webhook:
-            existing["DISCORD_WEBHOOK_URL"] = f"DISCORD_WEBHOOK_URL={discord_webhook}"
-        env_path.write_text("\n".join(existing.values()) + "\n")
+    updates = {
+        "FAX_WATCH_DIR": fax_dir,
+        "SECRET_KEY": config.SECRET_KEY,
+    }
+    if discord_webhook:
+        updates["DISCORD_WEBHOOK_URL"] = discord_webhook
+    _env_write(updates)
 
     # Config im Speicher aktualisieren
     config.FAX_WATCH_DIR = fax_dir
@@ -886,24 +879,47 @@ def _load_custom_categories():
 _env_lock = threading.Lock()
 
 
-def _save_env_settings():
-    """Laufzeit-aenderbare Einstellungen in .env speichern."""
+def _env_write(updates: dict):
+    """Merge-Write in .env: bestehende Zeilen bleiben, nur die in
+    `updates` genannten Keys werden ersetzt/angehaengt. Einzige Stelle
+    die .env schreibt — so gehen weder SECRET_KEY noch FAX_WATCH_DIR
+    durch inkonsistente Filter verloren.
+    """
     env_path = Path(config.BASE_DIR) / ".env"
     with _env_lock:
-        lines = []
+        existing = {}
+        order = []
         if env_path.exists():
             for line in env_path.read_text().splitlines():
-                if not line.startswith((
-                    "ARCHIVE_AFTER_DAYS=", "FORCE_ARCHIVE_AFTER_DAYS=",
-                    "DELETE_AFTER_DAYS=", "DEFAULT_PRINTER=", "DISCORD_WEBHOOK_URL=",
-                )):
-                    lines.append(line)
-        lines.append(f"ARCHIVE_AFTER_DAYS={config.ARCHIVE_AFTER_DAYS}")
-        lines.append(f"FORCE_ARCHIVE_AFTER_DAYS={config.FORCE_ARCHIVE_AFTER_DAYS}")
-        lines.append(f"DELETE_AFTER_DAYS={config.DELETE_AFTER_DAYS}")
-        lines.append(f"DEFAULT_PRINTER={config.DEFAULT_PRINTER}")
-        lines.append(f"DISCORD_WEBHOOK_URL={config.DISCORD_WEBHOOK_URL}")
-        env_path.write_text("\n".join(lines) + "\n")
+                if "=" in line and not line.lstrip().startswith("#"):
+                    key = line.split("=", 1)[0]
+                    if key not in existing:
+                        order.append(key)
+                    existing[key] = line
+                else:
+                    # Kommentarzeilen / leere Zeilen uebernehmen wir
+                    # als pseudo-keys mit eindeutigem Index.
+                    marker = f"__raw_{len(order)}"
+                    order.append(marker)
+                    existing[marker] = line
+        for key, value in updates.items():
+            if "\n" in str(value) or "\r" in str(value):
+                raise ValueError(f"Newline in {key} nicht erlaubt")
+            if key not in existing:
+                order.append(key)
+            existing[key] = f"{key}={value}"
+        env_path.write_text("\n".join(existing[k] for k in order) + "\n")
+
+
+def _save_env_settings():
+    """Laufzeit-aenderbare Einstellungen persistieren."""
+    _env_write({
+        "ARCHIVE_AFTER_DAYS": config.ARCHIVE_AFTER_DAYS,
+        "FORCE_ARCHIVE_AFTER_DAYS": config.FORCE_ARCHIVE_AFTER_DAYS,
+        "DELETE_AFTER_DAYS": config.DELETE_AFTER_DAYS,
+        "DEFAULT_PRINTER": config.DEFAULT_PRINTER,
+        "DISCORD_WEBHOOK_URL": config.DISCORD_WEBHOOK_URL,
+    })
 
 
 # --- UDP Discovery ---

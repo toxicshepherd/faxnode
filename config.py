@@ -31,12 +31,18 @@ def _get_or_create_secret_key():
         return key
     key = secrets.token_hex(32)
     env_path = BASE_DIR / ".env"
-    # Key in .env anfuegen, damit er beim naechsten Start erhalten bleibt
     try:
         with open(env_path, "a") as f:
             f.write(f"SECRET_KEY={key}\n")
-    except OSError:
-        pass  # Funktioniert trotzdem, wird nur nicht persistiert
+    except OSError as e:
+        # Ohne Persistenz kriegt jeder Neustart einen neuen Key —
+        # alle Sessions (SSE-Reconnect-IDs, CSRF-Tokens) werden
+        # ungueltig. Der Fehler muss sichtbar sein.
+        import logging
+        logging.getLogger(__name__).error(
+            "SECRET_KEY konnte nicht in .env persistiert werden: %s — "
+            "alle Sessions werden bei Neustart ungueltig!", e
+        )
     return key
 
 SECRET_KEY = _get_or_create_secret_key()
